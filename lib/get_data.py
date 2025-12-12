@@ -7,11 +7,9 @@ FILTER_PARAM_VALUE = '''[
   {
     "diva": "60201438",
     "lines": [
-      { "name": "49", "direction": "R" },
+      { "name": "49" },
       { "name": "N49", "direction": "R" },
-      { "name": "46", "direction": "R" },
-      { "name": "N46", "direction": "R" },
-      { "name": "47A", "direction": "R" }
+      { "name": "47A" }
     ]
   },
   {
