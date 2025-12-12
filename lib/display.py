@@ -88,13 +88,14 @@ def write_to_display(data, timestamp):
     # Extract all lines from all stops
     lines = [line for stop in data for line in stop['lines']]
 
-    # Sort by priority (preferred lines first)
+    # Sort by priority (preferred lines first), then by direction (R before H)
     priority_order = ['49', 'N49', 'U4', '47A', '52']
     lines = sorted(
         lines,
         key=lambda line: (
             line['name'] not in priority_order,
             priority_order.index(line['name']) if line['name'] in priority_order else 999,
+            line.get('direction', '') != 'R',  # R comes first
             line['name']
         )
     )
