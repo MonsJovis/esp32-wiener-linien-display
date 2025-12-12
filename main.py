@@ -1,5 +1,5 @@
 from utime import sleep
-from lib.display import init_display, write_error_to_display, write_fetching_sign_to_display, write_start_msg_to_display, write_to_display
+from lib.display import init_display, write_error_to_display, write_fetching_sign_to_display, write_start_msg_to_display, write_to_display, update_current_time
 from lib.led import led_error_blink, led_off, led_on
 from lib.init_wifi import init_wifi
 from lib.get_data import get_data
@@ -29,29 +29,44 @@ def initialize():
 def start_main_loop():
     global wdt
 
+    last_data_fetch = 0
+    DATA_REFRESH_INTERVAL = 30  # seconds
+
     while True:
         wdt.feed()
 
-        led_off()
+        import utime
+        current_time = utime.time()
 
-        print('Fetching data ...')
-        write_fetching_sign_to_display()
+        # Fetch new data every 30 seconds
+        if current_time - last_data_fetch >= DATA_REFRESH_INTERVAL:
+            led_off()
 
-        data = None
-        try:
-            data = get_data()
-        except Exception as e:
-            print(e)
+            print('Fetching data ...')
+            write_fetching_sign_to_display()
 
-        if data is None:
-            print('Error fetching data')
-            write_error_to_display('Error fetching data')
-            led_error_blink(5)
-            continue
+            data = None
+            try:
+                data = get_data()
+            except Exception as e:
+                print(e)
 
-        print('Writing to display ...')
-        write_to_display(data['data'], data['localeTimestamp'])
-        sleep(30)
+            if data is None:
+                print('Error fetching data')
+                write_error_to_display('Error fetching data')
+                led_error_blink(5)
+                last_data_fetch = current_time  # Avoid rapid retries
+                sleep(1)
+                continue
+
+            print('Writing to display ...')
+            write_to_display(data['data'], data['localeTimestamp'])
+            last_data_fetch = current_time
+
+        # Update current time display every second (only refreshes if minute changed)
+        update_current_time()
+
+        sleep(1)
 
 def main():
     initialize()
