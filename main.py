@@ -35,6 +35,7 @@ def start_main_loop():
     global wdt
 
     last_data_fetch = 0
+    has_displayed_data = False  # Track if we've ever shown data successfully
     DATA_REFRESH_INTERVAL = 30  # seconds
 
     while True:
@@ -55,13 +56,17 @@ def start_main_loop():
 
             if data is None:
                 print('Error fetching data')
-                write_error_to_display('Error fetching data')
+                # Only show error screen if we haven't displayed data yet
+                # Otherwise keep showing the last valid data (stale is better than error)
+                if not has_displayed_data:
+                    write_error_to_display('Error fetching data')
                 last_data_fetch = current_time  # Avoid rapid retries
                 sleep(1)
                 continue
 
             print('Writing to display ...')
-            write_to_display(data['data'], data['localeTimestamp'])
+            write_to_display(data['data'])
+            has_displayed_data = True
             last_data_fetch = current_time
 
         # Update current time display every second (only refreshes if minute changed)

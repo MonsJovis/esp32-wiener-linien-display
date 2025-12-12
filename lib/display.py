@@ -3,7 +3,6 @@ Display module for CrowPanel 4.2" E-Paper (400x300)
 """
 
 import utime
-from lib.parse_datetime import parse_datetime
 from lib.utils import two_digits
 from lib.ssd1683 import SSD1683
 from lib.fonts import draw_text_24, draw_text_16, get_text_width_24, FONT_24_HEIGHT, FONT_16_HEIGHT
@@ -127,7 +126,7 @@ def write_fetching_sign_to_display():
     pass
 
 
-def write_to_display(data, timestamp):
+def write_to_display(data):
     """Render departure data to display - uses partial refresh with periodic full refresh"""
     global epd, _refresh_count
 
@@ -204,20 +203,16 @@ def write_to_display(data, timestamp):
 
         line_index += 1
 
-    # Draw current time (bottom left) and last updated (bottom right)
-    datetime_tuple = parse_datetime(timestamp)
-    hours = two_digits(datetime_tuple[3])
-    minutes = two_digits(datetime_tuple[4])
+    # Store the update time for "updated X seconds ago" display
+    global _last_update_time
+    _last_update_time = utime.time()
 
-    # Current time - bottom left (with timezone offset)
+    # Draw current time (bottom left)
     local_time = utime.localtime(utime.time() + get_timezone_offset())
     current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
-    # Last updated - bottom right
-    updated_text = "Upd: {}:{}".format(hours, minutes)
-    updated_x = DISPLAY_WIDTH - len(updated_text) * 8 - TEXT_LEFT_OFFSET
-    epd.text(updated_text, updated_x, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
+    # Bottom right: leave empty initially (will show "updated X sec ago" after 20s)
 
     # Refresh display - use partial refresh normally, full refresh periodically to clear ghosting
     _refresh_count += 1
@@ -231,27 +226,54 @@ def write_to_display(data, timestamp):
 # Track last displayed minute to avoid unnecessary updates
 _last_displayed_minute = -1
 
+# Track last data update timestamp for "updated X seconds ago" display
+_last_update_time = 0
+
+
+# Width reserved for "updated X sec ago" text (max ~18 chars)
+UPDATED_TEXT_MAX_WIDTH = 18 * BUILTIN_FONT_WIDTH
+
+# Track last displayed "seconds ago" to avoid unnecessary refreshes
+_last_displayed_seconds_ago = -1
+
 
 def update_current_time():
-    """Update only the current time display. Returns True if display was updated."""
-    global epd, _last_displayed_minute
+    """Update current time and 'updated X sec ago' display. Returns True if display was updated."""
+    global epd, _last_displayed_minute, _last_update_time, _last_displayed_seconds_ago
 
     local_time = utime.localtime(utime.time() + get_timezone_offset())
     current_minute = local_time[4]
 
-    # Only update if minute changed
-    if current_minute == _last_displayed_minute:
+    # Calculate seconds since last data update
+    seconds_ago = utime.time() - _last_update_time if _last_update_time > 0 else 0
+
+    # Determine if we need to update the "X sec ago" display (only after 31s, update every 5s)
+    should_show_seconds_ago = seconds_ago > 31
+    seconds_ago_bucket = (seconds_ago // 5) * 5 if should_show_seconds_ago else -1
+
+    # Check if anything needs updating
+    minute_changed = current_minute != _last_displayed_minute
+    seconds_display_changed = seconds_ago_bucket != _last_displayed_seconds_ago
+
+    if not minute_changed and not seconds_display_changed:
         return False
 
-    _last_displayed_minute = current_minute
+    # Clear the bottom row
+    epd.fill_rect(TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, DISPLAY_WIDTH - 2 * TEXT_LEFT_OFFSET, BUILTIN_FONT_HEIGHT, COLOR_WHITE)
 
-    # Clear just the time area (bottom left) using fill_rect for efficiency
-    epd.fill_rect(TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, TIME_DISPLAY_WIDTH, BUILTIN_FONT_HEIGHT, COLOR_WHITE)
-
-    # Draw new time
+    # Draw current time (bottom left)
     current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
-    # Partial refresh for the time update
+    # Draw "updated X sec ago" (bottom right) only if > 20 seconds
+    if should_show_seconds_ago:
+        updated_text = 'updated {} sec ago'.format(seconds_ago_bucket)
+        updated_x = DISPLAY_WIDTH - len(updated_text) * BUILTIN_FONT_WIDTH - TEXT_LEFT_OFFSET
+        epd.text(updated_text, updated_x, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
+
+    _last_displayed_minute = current_minute
+    _last_displayed_seconds_ago = seconds_ago_bucket
+
+    # Partial refresh for the update
     epd.show_partial()
     return True
