@@ -47,23 +47,73 @@ def init_display():
     _refresh_count = 0
 
 
+def _draw_centered_text(text, y):
+    """Draw text horizontally centered on the display."""
+    text_width = len(text) * BUILTIN_FONT_WIDTH
+    x = (DISPLAY_WIDTH - text_width) // 2
+    epd.text(text, x, y, COLOR_BLACK)
+
+
+def _draw_boot_frame():
+    """Draw a decorative frame for boot/status screens."""
+    # Outer border
+    margin = 20
+    epd.rect(margin, margin, DISPLAY_WIDTH - 2 * margin, DISPLAY_HEIGHT - 2 * margin, COLOR_BLACK)
+    # Inner border (double-line effect)
+    epd.rect(margin + 3, margin + 3, DISPLAY_WIDTH - 2 * margin - 6, DISPLAY_HEIGHT - 2 * margin - 6, COLOR_BLACK)
+
+    # Top decorative line
+    line_y = 70
+    epd.hline(margin + 20, line_y, DISPLAY_WIDTH - 2 * margin - 40, COLOR_BLACK)
+
+    # Bottom decorative line
+    line_y = DISPLAY_HEIGHT - 90
+    epd.hline(margin + 20, line_y, DISPLAY_WIDTH - 2 * margin - 40, COLOR_BLACK)
+
+
 def write_start_msg_to_display(msg="Booting"):
-    """Show startup message - uses partial refresh to reduce flashing"""
+    """Show startup message with centered layout - uses partial refresh to reduce flashing"""
     global epd
     epd.fill(COLOR_WHITE)
-    # Use built-in font for startup messages (simple, readable)
-    epd.text("Starting ...", TEXT_LEFT_OFFSET, 100, COLOR_BLACK)
-    epd.text(msg, TEXT_LEFT_OFFSET, 120, COLOR_BLACK)
+
+    _draw_boot_frame()
+
+    # Title
+    _draw_centered_text("WIENER LINIEN", 90)
+    _draw_centered_text("Departure Monitor", 110)
+
+    # Status message
+    _draw_centered_text(msg, 150)
+
+    # Loading indicator dots
+    _draw_centered_text("...", 170)
+
+    # Footer
+    _draw_centered_text("Vienna Public Transport", DISPLAY_HEIGHT - 70)
+
     epd.show_partial()
 
 
 def write_error_to_display(msg="Unknown reason"):
-    """Show error message - uses full refresh to ensure visibility"""
+    """Show error message with centered layout - uses full refresh to ensure visibility"""
     global epd, _refresh_count
     epd.fill(COLOR_WHITE)
-    # Use built-in font for error messages
-    epd.text("ERROR", TEXT_LEFT_OFFSET, 80, COLOR_BLACK)
-    epd.text(msg, TEXT_LEFT_OFFSET, 100, COLOR_BLACK)
+
+    _draw_boot_frame()
+
+    # Error title with warning indicators
+    _draw_centered_text("! ! !  ERROR  ! ! !", 90)
+
+    # Horizontal separator
+    epd.hline(60, 115, DISPLAY_WIDTH - 120, COLOR_BLACK)
+
+    # Error message
+    _draw_centered_text(msg, 140)
+
+    # Instructions
+    _draw_centered_text("Check connection and", 180)
+    _draw_centered_text("restart device", 200)
+
     epd.show()  # Full refresh for errors to clear any ghosting
     _refresh_count = 0
 
