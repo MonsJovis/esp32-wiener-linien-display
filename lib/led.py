@@ -3,21 +3,17 @@ from utime import sleep
 
 led = Pin(2, Pin.OUT)
 
-def led_blink_error(seconds):
+def led_on():
+  led.on()
+
+def led_off():
+  led.off()
+
+def led_error_blink(seconds):
   seconds_passed = 0
   while seconds_passed < seconds:
-    led.on()
+    led_on()
     sleep(0.1)
-    led.off()
+    led_off()
     sleep(0.1)
     seconds_passed += 0.2
-
-def led_blink_success(seconds):
-  seconds_passed = 0
-  while seconds_passed < seconds:
-    led.on()
-    sleep(1)
-    led.off()
-    sleep(1)
-    seconds_passed += 2
-
