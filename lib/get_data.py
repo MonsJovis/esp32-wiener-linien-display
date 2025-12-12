@@ -26,10 +26,33 @@ FILTER_PARAM_VALUE = '''[
   }
 ]'''.replace('\n', ' ').replace('\r', '').replace('  ', '')
 
+def validate_response(data):
+    """Validate API response structure. Returns True if valid."""
+    if not isinstance(data, dict):
+        return False
+    if 'data' not in data or not isinstance(data['data'], list):
+        return False
+    if 'localeTimestamp' not in data:
+        return False
+    # Validate each stop has expected structure
+    for stop in data['data']:
+        if not isinstance(stop, dict) or 'lines' not in stop:
+            return False
+        for line in stop['lines']:
+            if not isinstance(line, dict) or 'name' not in line or 'departures' not in line:
+                return False
+    return True
+
+
 def get_data():
     data = make_request()
-    if (data is None):
-        return
+    if data is None:
+        return None
+
+    # Validate response structure before processing
+    if not validate_response(data):
+        print('Error: Invalid API response structure')
+        return None
 
     print('--- Start Output ---\n')
 
@@ -37,39 +60,27 @@ def get_data():
     for stop in data['data']:
         for line in stop['lines']:
             line_name = line['name']
-            countdowns = [f"{departure['countdown']}" for departure in line['departures']]
-            print(f"{line_name}: {'\", '.join(countdowns)}\"")
+            countdowns = [str(departure.get('countdown', '?')) for departure in line['departures']]
+            print('{}: {}'.format(line_name, ', '.join(countdowns)))
 
     print('\n--- End Output ---\n')
 
     return data
 
 def make_request():
-    global REQUEST_URL, FILTER_PARAM_VALUE
     url = REQUEST_URL + '?filter=' + url_encode(FILTER_PARAM_VALUE)
 
     print('Requesting data from:', url)
 
+    response = None
     try:
-        # Make the request
         response = requests.get(url, headers={'Accept': 'application/json'})
-        #Print the response code
-        print('Response code: ', response.status_code)
-
-    except Exception as e:
-        # Handle any exceptions during the request
-        print('Error during request:', e)
-        response.close()
-
-        return None
-
-    try:
+        print('Response code:', response.status_code)
         data = response.json()
+        return data
     except Exception as e:
-        data = None
-        print('Error parsing JSON response')
-
+        print('Error during request:', e)
+        return None
     finally:
-        response.close()
-
-    return data
+        if response is not None:
+            response.close()

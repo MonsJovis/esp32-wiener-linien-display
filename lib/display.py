@@ -2,10 +2,12 @@
 Display module for CrowPanel 4.2" E-Paper (400x300)
 """
 
+import utime
 from lib.parse_datetime import parse_datetime
 from lib.utils import two_digits
 from lib.ssd1683 import SSD1683
 from lib.fonts import draw_text_24, draw_text_16, get_text_width_24, FONT_24_HEIGHT, FONT_16_HEIGHT
+from lib.init_wifi import get_timezone_offset
 
 DISPLAY_WIDTH = 400
 DISPLAY_HEIGHT = 300
@@ -20,6 +22,11 @@ LINE_HEIGHT = 42  # Adjusted for new font sizes
 TOP_OFFSET = 8
 LAST_ROW_TOP_OFFSET = 288
 TIMES_COLUMN_X = 192  # Fixed X position where departure times start (table alignment)
+
+# Font sizes for built-in 8px font
+BUILTIN_FONT_HEIGHT = 8
+BUILTIN_FONT_WIDTH = 8
+TIME_DISPLAY_WIDTH = 5 * BUILTIN_FONT_WIDTH + 8  # "HH:MM" = 5 chars + padding
 
 # Display instance
 epd = None
@@ -152,10 +159,8 @@ def write_to_display(data, timestamp):
     minutes = two_digits(datetime_tuple[4])
 
     # Current time - bottom left (with timezone offset)
-    import utime
-    from lib.init_wifi import get_timezone_offset
     local_time = utime.localtime(utime.time() + get_timezone_offset())
-    current_time_text = "{}:{}".format(two_digits(local_time[3]), two_digits(local_time[4]))
+    current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
     # Last updated - bottom right
@@ -180,8 +185,6 @@ def update_current_time():
     """Update only the current time display. Returns True if display was updated."""
     global epd, _last_displayed_minute
 
-    import utime
-    from lib.init_wifi import get_timezone_offset
     local_time = utime.localtime(utime.time() + get_timezone_offset())
     current_minute = local_time[4]
 
@@ -191,14 +194,11 @@ def update_current_time():
 
     _last_displayed_minute = current_minute
 
-    # Clear just the time area (bottom left)
-    # 8x8 font, "HH:MM" = 5 chars = 40px wide
-    for y in range(LAST_ROW_TOP_OFFSET, LAST_ROW_TOP_OFFSET + 8):
-        for x in range(TEXT_LEFT_OFFSET, TEXT_LEFT_OFFSET + 48):
-            epd.pixel(x, y, COLOR_WHITE)
+    # Clear just the time area (bottom left) using fill_rect for efficiency
+    epd.fill_rect(TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, TIME_DISPLAY_WIDTH, BUILTIN_FONT_HEIGHT, COLOR_WHITE)
 
     # Draw new time
-    current_time_text = "{}:{}".format(two_digits(local_time[3]), two_digits(local_time[4]))
+    current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
     # Partial refresh for the time update

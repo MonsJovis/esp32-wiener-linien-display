@@ -22,10 +22,10 @@ def led_off():
 
 
 def led_error_blink(seconds):
-    seconds_passed = 0
-    while seconds_passed < seconds:
+    """Blink LED for error indication. Each cycle is 0.2 seconds (0.1s on, 0.1s off)."""
+    cycles = int(seconds * 5)  # 5 cycles per second (0.2s each)
+    for _ in range(cycles):
         led_on()
         sleep(0.1)
         led_off()
         sleep(0.1)
-        seconds_passed += 0.2

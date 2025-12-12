@@ -1,2 +1,0 @@
-# requirements-dev.txt
-micropython-esp32-stubs~=1.23.0
