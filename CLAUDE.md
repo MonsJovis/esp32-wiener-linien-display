@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ESP32-based real-time public transport departure display for Vienna (Wiener Linien). The device fetches live departure data from an API and displays upcoming departures on a 160x128 LCD screen, refreshing every 30 seconds.
+ESP32-S3 based real-time public transport departure display for Vienna (Wiener Linien). The device fetches live departure data from an API and displays upcoming departures on a 4.2" e-paper screen, refreshing every 30 seconds.
 
 ## Architecture
 
@@ -10,22 +10,25 @@ ESP32-based real-time public transport departure display for Vienna (Wiener Lini
 main.py                 # Entry point, initialization, main loop
 boot.py                 # MicroPython boot (empty)
 lib/
-  display.py            # LCD rendering (line names, departure times)
+  display.py            # E-paper rendering (line names, departure times)
+  fonts.py              # Bitmap fonts (24px for line names, 16px for times)
+  ssd1683.py            # SSD1683 e-paper display driver
   get_data.py           # API fetching with URL-encoded filters
   init_wifi.py          # Wi-Fi connection with retry logic
-  led.py                # Status LED control (GPIO pin 2)
+  led.py                # Status LED control (GPIO pin 41)
   parse_datetime.py     # ISO 8601 timestamp parsing
   secrets.py            # Loads Wi-Fi credentials from secrets.json
   urlencode.py          # URL encoding (supports German umlauts)
   utils.py              # Helper functions (zero-padding)
-  st7735/               # Display driver library (external)
 ```
 
 ## Hardware
 
-- **MCU**: ESP32
-- **Display**: ST7735 160x128 LCD via SPI (pins: SCK=14, MOSI=13, MISO=12, clock=20MHz)
-- **LED**: GPIO pin 2 for status indication
+- **MCU**: ESP32-S3 (CrowPanel 4.2" E-Paper HMI)
+- **Display**: SSD1683 400x300 e-paper via SPI
+  - Pins: SCK=12, MOSI=11, CS=45, DC=46, RST=47, BUSY=48, PWR=7
+- **LED**: GPIO pin 41 for status indication
+- **Buttons**: HOME=2, EXIT=1, Rotary: PREV=4, DONE=5, NEXT=6
 
 ## Code Flow
 
@@ -33,12 +36,23 @@ lib/
 2. `start_main_loop()`: 30-second polling loop
    - Fetch data from `https://wl-proxy.monsjovis.dev/monitor/next-departures`
    - Parse and sort departures by priority (U4, 49, N49, 46, N46, 47A, 52 first)
-   - Render to display with countdown times
-   - 60-second watchdog timer prevents hangs
+   - Render to display with countdown times using bitmap fonts
+   - 90-second watchdog timer prevents hangs
+
+## E-Paper Display
+
+- **Partial refresh**: Used for regular updates (minimal flashing, ~0.5s)
+- **Full refresh**: Every 10 updates to clear ghosting (~3s with flash)
+- **Fonts**: Custom bitmap fonts for crisp rendering
+  - 24px: Line names (U4, 49, N49, etc.)
+  - 16px: Departure times (5', 12', etc.)
+  - 8px: Built-in font for timestamp
 
 ## Development
 
-**Deployment**: Use Pymakr VS Code extension to upload files to ESP32.
+**Deployment**: Use Pymakr VS Code extension or `mpremote` to upload files to ESP32-S3.
+
+**Firmware**: Flash MicroPython for ESP32-S3 (with SPIRAM support recommended).
 
 **Credentials**: Create `secrets.json` in project root (not in git):
 ```json
@@ -57,3 +71,4 @@ lib/
 - MicroPython imports: `ujson`, `utime`, `machine`, `network`
 - Memory-constrained: use `gc.collect()` when needed
 - Error handling: catch exceptions, display error message, blink LED, continue polling
+- E-paper optimization: minimize full refreshes to reduce flashing
