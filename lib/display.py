@@ -5,7 +5,7 @@ Display module for CrowPanel 4.2" E-Paper (400x300)
 import utime
 from lib.utils import two_digits
 from lib.ssd1683 import SSD1683
-from lib.fonts import draw_text_24, draw_text_16, get_text_width_24, FONT_24_HEIGHT, FONT_16_HEIGHT
+from lib.fonts import draw_text_24, draw_text_16, FONT_24_HEIGHT, FONT_16_HEIGHT
 from lib.init_wifi import get_timezone_offset
 
 DISPLAY_WIDTH = 400
@@ -16,11 +16,18 @@ COLOR_BLACK = 0
 COLOR_WHITE = 1
 
 # Layout constants
-TEXT_LEFT_OFFSET = 4
-LINE_HEIGHT = 42  # Adjusted for new font sizes
-TOP_OFFSET = 8
+TEXT_LEFT_OFFSET = 8
+LINE_NAME_WIDTH = 52  # Fixed width for line name column (e.g., "49", "U4", "47A")
+DESTINATION_X = 70  # X position for destination text
+TIMES_COLUMN_X = 190  # Fixed X position where departure times start
+TIME_SLOT_WIDTH = 52  # Width per time slot - wider for better readability
+
+# Row heights for grouped layout
+GROUP_FIRST_ROW_HEIGHT = 34  # First row of group (with line name)
+GROUP_SUB_ROW_HEIGHT = 28  # Subsequent rows (destination only)
+GROUP_SEPARATOR_PADDING = 6  # Padding above and below separator line
+TOP_OFFSET = 4
 LAST_ROW_TOP_OFFSET = 288
-TIMES_COLUMN_X = 192  # Fixed X position where departure times start (table alignment)
 
 # Font sizes for built-in 8px font
 BUILTIN_FONT_HEIGHT = 8
@@ -126,13 +133,45 @@ def write_fetching_sign_to_display():
     pass
 
 
+def _shorten_destination(towards):
+    """Shorten and normalize destination names for display."""
+    if not towards:
+        return ''
+
+    # Take first part before comma
+    towards = towards.split(',')[0].strip()
+
+    # Shorten known long names
+    shortnames = {
+        'HEILIGENSTADT': 'Heiligenst.',
+        'ANSCHÜTZGASSE': 'Anschuetzg.',
+        'UNTER ST. VEIT U': 'Unter St. V.',
+        'WESTBAHNHOF S U': 'Westbahnhof',
+        'HÜTTELDORF': 'Huetteldorf',
+        'KLINIK PENZING': 'Kl. Penzing',
+    }
+
+    upper = towards.upper()
+    if upper in shortnames:
+        towards = shortnames[upper]
+
+    # Replace German umlauts
+    towards = towards.replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue')
+    towards = towards.replace('Ä', 'Ae').replace('Ö', 'Oe').replace('Ü', 'Ue').replace('ß', 'ss')
+
+    return towards
+
+
+def _draw_separator_line(y):
+    """Draw a thin horizontal separator line."""
+    epd.hline(TEXT_LEFT_OFFSET, y, DISPLAY_WIDTH - 2 * TEXT_LEFT_OFFSET, COLOR_BLACK)
+
+
 def write_to_display(data):
-    """Render departure data to display - uses partial refresh with periodic full refresh"""
+    """Render departure data to display with grouped layout by line."""
     global epd, _refresh_count
 
     epd.fill(COLOR_WHITE)
-
-    line_index = 0
 
     # Extract all lines from all stops
     lines = [line for stop in data for line in stop['lines']]
@@ -149,59 +188,74 @@ def write_to_display(data):
         )
     )
 
+    # Group lines by name
+    grouped = {}
     for line in lines:
-        pos_y = TOP_OFFSET + line_index * LINE_HEIGHT
-        line_name = line['name']
-        departures = line['departures']
+        name = line['name']
+        if name not in grouped:
+            grouped[name] = []
+        grouped[name].append(line)
 
-        # Filter U4 departures (need at least 6 min to reach the station)
-        if line_name == 'U4':
-            departures = [d for d in departures if d['countdown'] >= 6]
+    # Maintain priority order for groups
+    group_order = []
+    seen = set()
+    for line in lines:
+        if line['name'] not in seen:
+            group_order.append(line['name'])
+            seen.add(line['name'])
 
-        # Format departure times (right-pad single digits for alignment)
-        times = []
-        for d in departures[:5]:
-            t = str(d['countdown']) + "'"
-            # Pad single-digit times with trailing space for consistent width
-            if d['countdown'] < 10:
-                t = ' ' + t  # Leading space for single digits
-            times.append(t)
-        times_text = '  '.join(times)
+    # Render grouped layout
+    current_y = TOP_OFFSET
 
-        # Draw line name with 24px bitmap font
-        draw_text_24(epd, TEXT_LEFT_OFFSET, pos_y, line_name, COLOR_BLACK)
+    for group_idx, line_name in enumerate(group_order):
+        group_lines = grouped[line_name]
 
-        # Draw destination with 8px built-in font
-        towards = line.get('towards', '').split(',')[0].strip() if line.get('towards') else ''
+        # Draw separator line before group (except first)
+        if group_idx > 0:
+            current_y += GROUP_SEPARATOR_PADDING
+            _draw_separator_line(current_y)
+            current_y += GROUP_SEPARATOR_PADDING + 1  # +1 for line thickness
 
-        # Shorten
-        if towards.upper() == 'HEILIGENSTADT':
-            towards = 'Heiligenst.'
+        for row_idx, line in enumerate(group_lines):
+            departures = line['departures']
 
-        if towards.upper() == 'ANSCHÜTZGASSE':
-            towards = 'Anschützg.'
+            # Filter U4 departures (need at least 6 min to reach station)
+            if line_name == 'U4':
+                departures = [d for d in departures if d['countdown'] >= 6]
 
-        if towards.upper() == 'UNTER ST. VEIT U':
-            towards = 'Unter St. Veit'
+            is_first_row = (row_idx == 0)
+            row_height = GROUP_FIRST_ROW_HEIGHT if is_first_row else GROUP_SUB_ROW_HEIGHT
 
-        if towards.upper() == 'WESTBAHNHOF S U':
-            towards = 'Westbhf.'
+            # Draw line name only on first row of group
+            if is_first_row:
+                name_y = current_y + (row_height - FONT_24_HEIGHT) // 2
+                draw_text_24(epd, TEXT_LEFT_OFFSET, name_y, line_name, COLOR_BLACK)
 
-        # Replace German umlauts for better readability on e-paper
-        towards = towards.replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue').replace('Ä', 'Ae').replace('Ö', 'Oe').replace('Ü', 'Ue').replace('ß', 'ss')
+            # Draw destination
+            towards = _shorten_destination(line.get('towards', ''))
+            dest_y = current_y + (row_height - BUILTIN_FONT_HEIGHT) // 2
+            epd.text(towards, DESTINATION_X, dest_y, COLOR_BLACK)
 
-        towards_x = TEXT_LEFT_OFFSET + get_text_width_24(line_name) + 8
-        towards_y = pos_y + 8  # Vertically center 8px font within 24px line
-        epd.text(towards, towards_x, towards_y, COLOR_BLACK)
+            # Draw departure times in fixed columns
+            times_y = current_y + (row_height - FONT_16_HEIGHT) // 2
+            for i, dep in enumerate(departures[:4]):  # Max 4 times
+                countdown = dep['countdown']
 
-        # Draw departure times with 16px bitmap font
-        # Fixed column position for table alignment
-        times_x = TIMES_COLUMN_X
-        # Vertically center the smaller font relative to line name
-        times_y = pos_y + (FONT_24_HEIGHT - FONT_16_HEIGHT) // 2
-        draw_text_16(epd, times_x, times_y, times_text, COLOR_BLACK)
+                # Calculate x position for this time slot
+                time_x = TIMES_COLUMN_X + i * TIME_SLOT_WIDTH
 
-        line_index += 1
+                if countdown == 0:
+                    # Show dot for arriving (like Wiener Linien displays)
+                    time_x += 16  # Center the dot in the slot
+                    draw_text_16(epd, time_x, times_y, '.', COLOR_BLACK)
+                else:
+                    time_str = str(countdown) + "'"
+                    # Right-align within slot: pad single digits
+                    if countdown < 10:
+                        time_x += 12  # Offset for single digit
+                    draw_text_16(epd, time_x, times_y, time_str, COLOR_BLACK)
+
+            current_y += row_height
 
     # Store the update time for "updated X seconds ago" display
     global _last_update_time
@@ -212,15 +266,13 @@ def write_to_display(data):
     current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
-    # Bottom right: leave empty initially (will show "updated X sec ago" after 20s)
-
-    # Refresh display - use partial refresh normally, full refresh periodically to clear ghosting
+    # Refresh display - use partial refresh normally, full refresh periodically
     _refresh_count += 1
     if _refresh_count >= FULL_REFRESH_INTERVAL:
         epd.show()  # Full refresh to clear ghosting
         _refresh_count = 0
     else:
-        epd.show_partial()  # Partial refresh - faster, less flashing
+        epd.show_partial()
 
 
 # Track last displayed minute to avoid unnecessary updates
