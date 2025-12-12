@@ -3,6 +3,10 @@
     {
       "name": "esp-public-transport-screen",
       "path": "."
+    },
+    {
+      "name": "serial://dev/tty.usbserial-140",
+      "uri": "serial://%2fdev%2ftty.usbserial-140/"
     }
   ],
   "settings": {

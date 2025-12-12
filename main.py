@@ -5,7 +5,8 @@ from lib.init_wifi import init_wifi
 from lib.get_data import get_data
 from machine import WDT
 
-wdt = WDT(timeout=60 * 1000)
+# Watchdog timer: 90s to account for e-paper refresh time (~3s)
+wdt = WDT(timeout=90 * 1000)
 
 def initialize():
     led_on()
