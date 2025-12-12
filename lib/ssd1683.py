@@ -86,9 +86,16 @@ class SSD1683(FrameBuffer):
         self._dat((y >> 8) & 0xFF)
 
     def _update(self):
-        """Trigger display refresh"""
+        """Trigger full display refresh (causes flashing)"""
         self._cmd(0x22)
-        self._dat(0xF7)
+        self._dat(0xF7)  # Full refresh mode
+        self._cmd(0x20)
+        self._wait()
+
+    def _update_partial(self):
+        """Trigger partial display refresh (minimal flashing)"""
+        self._cmd(0x22)
+        self._dat(0xDC)  # Partial refresh mode
         self._cmd(0x20)
         self._wait()
 
@@ -131,13 +138,22 @@ class SSD1683(FrameBuffer):
         sleep_ms(100)
 
     def show(self):
-        """Write framebuffer to display and refresh"""
+        """Write framebuffer to display and do full refresh (flashes)"""
         self._cmd(0x24)  # Write RAM
         self._cs(0)
         self._dc(1)
         self._spi.write(self._buf)
         self._cs(1)
         self._update()
+
+    def show_partial(self):
+        """Write framebuffer to display and do partial refresh (minimal flashing)"""
+        self._cmd(0x24)  # Write RAM
+        self._cs(0)
+        self._dc(1)
+        self._spi.write(self._buf)
+        self._cs(1)
+        self._update_partial()
 
     @property
     def width(self):

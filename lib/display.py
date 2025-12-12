@@ -5,6 +5,7 @@ Display module for CrowPanel 4.2" E-Paper (400x300)
 from lib.parse_datetime import parse_datetime
 from lib.utils import two_digits
 from lib.ssd1683 import SSD1683
+from lib.fonts import draw_text_24, draw_text_16, get_text_width_24, FONT_24_HEIGHT, FONT_16_HEIGHT
 
 DISPLAY_WIDTH = 400
 DISPLAY_HEIGHT = 300
@@ -15,59 +16,48 @@ COLOR_WHITE = 1
 
 # Layout constants
 TEXT_LEFT_OFFSET = 20
-LINE_HEIGHT = 40
-TOP_OFFSET = 15
-LAST_ROW_TOP_OFFSET = 275
-
-# Font scaling (MicroPython framebuf.text uses 8x8 font)
-FONT_WIDTH = 8
-FONT_HEIGHT = 8
+LINE_HEIGHT = 36  # Adjusted for new font sizes
+TOP_OFFSET = 12
+LAST_ROW_TOP_OFFSET = 280
 
 # Display instance
 epd = None
 
+# Refresh management
+_refresh_count = 0
+FULL_REFRESH_INTERVAL = 10  # Do full refresh every N updates to clear ghosting
+
 
 def init_display():
     """Initialize the e-paper display"""
-    global epd
+    global epd, _refresh_count
     epd = SSD1683()
     epd.init()
     epd.fill(COLOR_WHITE)
+    # Single full refresh on startup to ensure clean slate
     epd.show()
-
-
-def _draw_text_scaled(x, y, text, color, scale=1):
-    """
-    Draw text with scaling.
-    MicroPython's framebuf only supports 8x8 font at 1x scale.
-    For larger text, we draw each character multiple times offset.
-    """
-    global epd
-    if scale == 1:
-        epd.text(text, x, y, color)
-    else:
-        # Simple scaling by drawing text multiple times with offsets
-        for dy in range(scale):
-            for dx in range(scale):
-                epd.text(text, x + dx, y + dy, color)
+    _refresh_count = 0
 
 
 def write_start_msg_to_display(msg="Booting"):
-    """Show startup message"""
+    """Show startup message - uses partial refresh to reduce flashing"""
     global epd
     epd.fill(COLOR_WHITE)
-    _draw_text_scaled(TEXT_LEFT_OFFSET, 100, "Starting ...", COLOR_BLACK, 3)
-    _draw_text_scaled(TEXT_LEFT_OFFSET, 150, msg, COLOR_BLACK, 2)
-    epd.show()
+    # Use built-in font for startup messages (simple, readable)
+    epd.text("Starting ...", TEXT_LEFT_OFFSET, 100, COLOR_BLACK)
+    epd.text(msg, TEXT_LEFT_OFFSET, 120, COLOR_BLACK)
+    epd.show_partial()
 
 
 def write_error_to_display(msg="Unknown reason"):
-    """Show error message"""
-    global epd
+    """Show error message - uses full refresh to ensure visibility"""
+    global epd, _refresh_count
     epd.fill(COLOR_WHITE)
-    _draw_text_scaled(TEXT_LEFT_OFFSET, 80, "Error", COLOR_BLACK, 4)
-    _draw_text_scaled(TEXT_LEFT_OFFSET, 140, msg, COLOR_BLACK, 2)
-    epd.show()
+    # Use built-in font for error messages
+    epd.text("ERROR", TEXT_LEFT_OFFSET, 80, COLOR_BLACK)
+    epd.text(msg, TEXT_LEFT_OFFSET, 100, COLOR_BLACK)
+    epd.show()  # Full refresh for errors to clear any ghosting
+    _refresh_count = 0
 
 
 def write_fetching_sign_to_display():
@@ -80,8 +70,8 @@ def write_fetching_sign_to_display():
 
 
 def write_to_display(data, timestamp):
-    """Render departure data to display"""
-    global epd
+    """Render departure data to display - uses partial refresh with periodic full refresh"""
+    global epd, _refresh_count
 
     epd.fill(COLOR_WHITE)
 
@@ -114,21 +104,29 @@ def write_to_display(data, timestamp):
         times = [str(d['countdown']) + "'" for d in departures[:5]]
         times_text = '  '.join(times)
 
-        # Draw line name (larger, bold effect)
-        _draw_text_scaled(TEXT_LEFT_OFFSET, pos_y, line_name, COLOR_BLACK, 3)
+        # Draw line name with 24px bitmap font
+        draw_text_24(epd, TEXT_LEFT_OFFSET, pos_y, line_name, COLOR_BLACK)
 
-        # Draw departure times
-        times_x = TEXT_LEFT_OFFSET + len(line_name) * FONT_WIDTH * 3 + 30
-        _draw_text_scaled(times_x, pos_y + 4, times_text, COLOR_BLACK, 2)
+        # Draw departure times with 16px bitmap font
+        # Position after line name with some spacing
+        times_x = TEXT_LEFT_OFFSET + get_text_width_24(line_name) + 20
+        # Vertically center the smaller font relative to line name
+        times_y = pos_y + (FONT_24_HEIGHT - FONT_16_HEIGHT) // 2
+        draw_text_16(epd, times_x, times_y, times_text, COLOR_BLACK)
 
         line_index += 1
 
-    # Draw timestamp at bottom
+    # Draw timestamp at bottom (using built-in 8x8 font - user said it looks fine)
     datetime_tuple = parse_datetime(timestamp)
     hours = two_digits(datetime_tuple[3])
     minutes = two_digits(datetime_tuple[4])
     timestamp_text = "Last updated: {}:{}".format(hours, minutes)
-    _draw_text_scaled(TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, timestamp_text, COLOR_BLACK, 1)
+    epd.text(timestamp_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
-    # Refresh display
-    epd.show()
+    # Refresh display - use partial refresh normally, full refresh periodically to clear ghosting
+    _refresh_count += 1
+    if _refresh_count >= FULL_REFRESH_INTERVAL:
+        epd.show()  # Full refresh to clear ghosting
+        _refresh_count = 0
+    else:
+        epd.show_partial()  # Partial refresh - faster, less flashing
