@@ -19,6 +19,7 @@ TEXT_LEFT_OFFSET = 4
 LINE_HEIGHT = 42  # Adjusted for new font sizes
 TOP_OFFSET = 8
 LAST_ROW_TOP_OFFSET = 288
+TIMES_COLUMN_X = 192  # Fixed X position where departure times start (table alignment)
 
 # Display instance
 epd = None
@@ -100,15 +101,21 @@ def write_to_display(data, timestamp):
         if line_name == 'U4':
             departures = [d for d in departures if d['countdown'] >= 6]
 
-        # Format departure times
-        times = [str(d['countdown']) + "'" for d in departures[:5]]
+        # Format departure times (right-pad single digits for alignment)
+        times = []
+        for d in departures[:5]:
+            t = str(d['countdown']) + "'"
+            # Pad single-digit times with trailing space for consistent width
+            if d['countdown'] < 10:
+                t = ' ' + t  # Leading space for single digits
+            times.append(t)
         times_text = '  '.join(times)
 
         # Draw line name with 24px bitmap font
         draw_text_24(epd, TEXT_LEFT_OFFSET, pos_y, line_name, COLOR_BLACK)
 
         # Draw destination with 8px built-in font
-        towards = line.get('towards', '').split(',')[0] if line.get('towards') else ''
+        towards = line.get('towards', '').split(',')[0].strip() if line.get('towards') else ''
 
         # Shorten
         if towards.upper() == 'HEILIGENSTADT':
@@ -131,8 +138,8 @@ def write_to_display(data, timestamp):
         epd.text(towards, towards_x, towards_y, COLOR_BLACK)
 
         # Draw departure times with 16px bitmap font
-        # Position after destination with some spacing
-        times_x = towards_x + len(towards) * 8 + 12
+        # Fixed column position for table alignment
+        times_x = TIMES_COLUMN_X
         # Vertically center the smaller font relative to line name
         times_y = pos_y + (FONT_24_HEIGHT - FONT_16_HEIGHT) // 2
         draw_text_16(epd, times_x, times_y, times_text, COLOR_BLACK)
