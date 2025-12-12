@@ -1,7 +1,6 @@
 import utime
 from utime import sleep
 from lib.display import init_display, write_error_to_display, write_fetching_sign_to_display, write_start_msg_to_display, write_to_display, update_current_time
-from lib.led import led_error_blink, led_off, led_on
 from lib.init_wifi import init_wifi
 from lib.get_data import get_data
 from machine import WDT
@@ -12,7 +11,6 @@ wdt = WDT(timeout=90 * 1000)
 def initialize():
     global wdt
 
-    led_on()
     wdt.feed()
 
     print('Initializing display ...')
@@ -25,7 +23,6 @@ def initialize():
     if not init_wifi(wdt):
         print('Wi-Fi connection failed')
         write_error_to_display('Wi-Fi connection failed')
-        led_error_blink(10)
         return False
 
     print('Wi-Fi connection successful')
@@ -47,8 +44,6 @@ def start_main_loop():
 
         # Fetch new data every 30 seconds
         if current_time - last_data_fetch >= DATA_REFRESH_INTERVAL:
-            led_off()
-
             print('Fetching data ...')
             write_fetching_sign_to_display()
 
@@ -61,7 +56,6 @@ def start_main_loop():
             if data is None:
                 print('Error fetching data')
                 write_error_to_display('Error fetching data')
-                led_error_blink(5)
                 last_data_fetch = current_time  # Avoid rapid retries
                 sleep(1)
                 continue

@@ -15,7 +15,6 @@ lib/
   ssd1683.py            # SSD1683 e-paper display driver
   get_data.py           # API fetching with URL-encoded filters
   init_wifi.py          # Wi-Fi connection with retry logic
-  led.py                # Status LED control (GPIO pin 41)
   parse_datetime.py     # ISO 8601 timestamp parsing
   secrets.py            # Loads Wi-Fi credentials from secrets.json
   urlencode.py          # URL encoding (supports German umlauts)
@@ -26,8 +25,6 @@ lib/
 
 - **MCU**: ESP32-S3 (CrowPanel 4.2" E-Paper HMI)
 - **Display**: SSD1683 400x300 e-paper via SPI
-  - Pins: SCK=12, MOSI=11, CS=45, DC=46, RST=47, BUSY=48, PWR=7
-- **LED**: GPIO pin 41 for status indication
 - **Buttons**: HOME=2, EXIT=1, Rotary: PREV=4, DONE=5, NEXT=6
 
 ## Code Flow
@@ -50,11 +47,12 @@ lib/
 
 ## Development
 
-**Deployment**: Use Pymakr VS Code extension or `mpremote` to upload files to ESP32-S3.
+**Deployment**: Use `mpremote` to upload files to ESP32-S3. See also the ./deploy.sh script.
 
 **Firmware**: Flash MicroPython for ESP32-S3 (with SPIRAM support recommended).
 
 **Credentials**: Create `secrets.json` in project root (not in git):
+
 ```json
 {
   "wifi_ssid": "YOUR_SSID",
@@ -63,6 +61,7 @@ lib/
 ```
 
 **Modifying monitored lines**: Edit the `filter` list in `lib/get_data.py`. Each entry has:
+
 - `diva`: Stop ID
 - `lines`: Array of `{name, direction}` (R=outbound, H=inbound)
 
