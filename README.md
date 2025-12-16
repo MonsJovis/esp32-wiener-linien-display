@@ -1,4 +1,4 @@
-# ESP32 Public Transport Departure Display
+# ESP32 Wiener Linien Display
 
 Real-time public transport departure display for Vienna (Wiener Linien) running on an ESP32-S3 with a 4.2" e-paper screen.
 
