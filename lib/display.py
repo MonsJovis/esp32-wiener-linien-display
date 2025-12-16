@@ -149,6 +149,7 @@ def _shorten_destination(towards):
         'WESTBAHNHOF S U': 'Westbahnhof',
         'HÜTTELDORF': 'Huetteldorf',
         'KLINIK PENZING': 'Kl. Penzing',
+        'URBAN LORITZ PLATZ': 'U. Loritz Pl.',
     }
 
     upper = towards.upper()
