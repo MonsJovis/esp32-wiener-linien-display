@@ -215,32 +215,46 @@ def make_request():
 
     url = build_api_url()
 
-    print('Requesting data from:', url)
+    print('make_request: requesting from:', url)
 
-    # Force GC before request to maximize available memory
+    # Force GC multiple times before request to maximize available memory
+    # This helps defragment memory for the TLS handshake which needs large contiguous blocks
+    print('make_request: running gc.collect() before request')
     collect()
+    collect()
+    collect()
+
+    # Log available memory for debugging
+    import gc as gc_module
+    print('make_request: free memory:', gc_module.mem_free(), 'bytes')
 
     response = None
     try:
-        response = requests.get(url, headers={'Accept': 'application/json'})
-        print('Response code:', response.status_code)
+        print('make_request: starting HTTP GET (timeout=5s)...')
+        response = requests.get(url, headers={'Accept': 'application/json'}, timeout=5)
+        print('make_request: HTTP GET complete, status:', response.status_code)
 
         if response.status_code != 200:
-            print('Error: Non-200 response, status:', response.status_code)
+            print('make_request: Error - non-200 response, closing')
             response.close()
             return None
 
         # Stream JSON parsing - read directly from socket
         # ujson.load() reads from file-like object
+        print('make_request: parsing JSON response...')
         raw_data = ujson.load(response.raw)
+        print('make_request: JSON parsed successfully')
 
         # Close response immediately after parsing
+        print('make_request: closing response')
         response.close()
         response = None
         collect()
 
         # Transform to simplified format
+        print('make_request: transforming response...')
         result = transform_response(raw_data)
+        print('make_request: transformation complete')
 
         # Force garbage collection after transformation
         collect()
@@ -248,10 +262,11 @@ def make_request():
         return result
 
     except Exception as e:
-        print('Error during request:', type(e).__name__, e)
+        print('make_request: Error -', type(e).__name__, e)
         import sys
         sys.print_exception(e)
         return None
     finally:
         if response is not None:
+            print('make_request: closing response in finally block')
             response.close()

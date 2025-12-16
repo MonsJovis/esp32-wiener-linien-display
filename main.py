@@ -1,6 +1,6 @@
 import utime
 from utime import sleep
-from lib.display import init_display, write_error_to_display, write_fetching_sign_to_display, write_start_msg_to_display, write_to_display, update_current_time
+from lib.display import init_display, write_error_to_display, write_fetching_sign_to_display, write_start_msg_to_display, write_to_display, update_current_time, update_arriving_animation, clear_cached_departures
 from lib.init_wifi import init_wifi
 from lib.get_data import get_data
 from machine import WDT
@@ -35,8 +35,10 @@ def start_main_loop():
     global wdt
 
     last_data_fetch = 0
+    last_animation_toggle = 0
     has_displayed_data = False  # Track if we've ever shown data successfully
     DATA_REFRESH_INTERVAL = 30  # seconds
+    ANIMATION_INTERVAL = 4  # seconds - animation toggle for arriving indicators
 
     while True:
         wdt.feed()
@@ -45,12 +47,17 @@ def start_main_loop():
 
         # Fetch new data every 30 seconds
         if current_time - last_data_fetch >= DATA_REFRESH_INTERVAL:
+            wdt.feed()  # Feed watchdog before potentially long HTTP request
             print('Fetching data ...')
             write_fetching_sign_to_display()
+
+            # Clear cached data to free memory before HTTP request
+            clear_cached_departures()
 
             data = None
             try:
                 data = get_data()
+                wdt.feed()  # Feed watchdog after HTTP request completes
             except Exception as e:
                 print(e)
 
@@ -66,11 +73,19 @@ def start_main_loop():
 
             print('Writing to display ...')
             write_to_display(data['data'])
+            wdt.feed()  # Feed watchdog after display update
             has_displayed_data = True
             last_data_fetch = current_time
+            last_animation_toggle = current_time  # Reset animation timer after data refresh
 
-        # Update current time display every second (only refreshes if minute changed)
-        update_current_time()
+        # Toggle arriving indicator animation every 3 seconds
+        if has_displayed_data and current_time - last_animation_toggle >= ANIMATION_INTERVAL:
+            update_arriving_animation()
+            wdt.feed()  # Feed watchdog after animation update
+            last_animation_toggle = current_time
+        else:
+            # Update current time display every second (only refreshes if minute changed)
+            update_current_time()
 
         sleep(1)
 

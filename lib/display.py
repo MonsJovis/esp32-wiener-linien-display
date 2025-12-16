@@ -3,6 +3,7 @@ Display module for CrowPanel 4.2" E-Paper (400x300)
 """
 
 import utime
+import gc
 from lib.utils import two_digits
 from lib.ssd1683 import SSD1683
 from lib.fonts import draw_text_24, draw_text_16, FONT_24_HEIGHT, FONT_16_HEIGHT
@@ -40,6 +41,12 @@ epd = None
 # Refresh management
 _refresh_count = 0
 FULL_REFRESH_INTERVAL = 40  # Do full refresh every N updates to clear ghosting
+
+# Animation state for arriving indicator
+_arriving_indicator_state = False  # False=bottom-left, True=top-right
+
+# Cached departure data for animation redraws
+_cached_departures = None
 
 
 def init_display():
@@ -170,7 +177,12 @@ def _draw_separator_line(y):
 
 def write_to_display(data):
     """Render departure data to display with grouped layout by line."""
-    global epd, _refresh_count
+    global epd, _refresh_count, _cached_departures
+
+    print('write_to_display: starting render, animation_state={}'.format(_arriving_indicator_state))
+
+    # Cache the data for animation redraws
+    _cached_departures = data
 
     epd.fill(COLOR_WHITE)
 
@@ -246,9 +258,14 @@ def write_to_display(data):
                 time_x = TIMES_COLUMN_X + i * TIME_SLOT_WIDTH
 
                 if countdown == 0:
-                    # Show dot for arriving (like Wiener Linien displays)
-                    time_x += 16  # Center the dot in the slot
-                    draw_text_16(epd, time_x, times_y, '.', COLOR_BLACK)
+                    # Animated square for arriving (alternates bottom-left / top-right)
+                    square_size = 8  # 8x8 square
+                    if _arriving_indicator_state:
+                        # Top-right position (8px offset on x axis)
+                        epd.fill_rect(time_x + 8, times_y, square_size, square_size, COLOR_BLACK)
+                    else:
+                        # Bottom-left position
+                        epd.fill_rect(time_x, times_y + FONT_16_HEIGHT - square_size, square_size, square_size, COLOR_BLACK)
                 else:
                     time_str = str(countdown) + "'"
                     # Right-align within slot: pad single digits
@@ -270,10 +287,56 @@ def write_to_display(data):
     # Refresh display - use partial refresh normally, full refresh periodically
     _refresh_count += 1
     if _refresh_count >= FULL_REFRESH_INTERVAL:
+        print('write_to_display: full refresh (count={})'.format(_refresh_count))
         epd.show()  # Full refresh to clear ghosting
         _refresh_count = 0
     else:
+        print('write_to_display: partial refresh (count={})'.format(_refresh_count))
         epd.show_partial()
+
+    # Free memory after display refresh to help with TLS allocation
+    gc.collect()
+
+
+def clear_cached_departures():
+    """Clear cached departure data to free memory."""
+    global _cached_departures
+    _cached_departures = None
+    gc.collect()
+
+
+def _has_arriving_departures(data):
+    """Check if there are any departures with countdown == 0."""
+    if data is None:
+        return False
+    for stop in data:
+        for line in stop.get('lines', []):
+            for dep in line.get('departures', [])[:4]:  # Only check first 4 (displayed)
+                if dep.get('countdown', -1) == 0:
+                    return True
+    return False
+
+
+def update_arriving_animation():
+    """Toggle animation state and redraw display from cached data."""
+    global _arriving_indicator_state, _cached_departures
+
+    # Skip animation if no departures are arriving
+    if not _has_arriving_departures(_cached_departures):
+        print('update_arriving_animation: no arriving departures, skipping')
+        return False
+
+    # Toggle the animation state
+    old_state = _arriving_indicator_state
+    _arriving_indicator_state = not _arriving_indicator_state
+    print('update_arriving_animation: toggled {} -> {}'.format(old_state, _arriving_indicator_state))
+
+    # Redraw from cached data if available
+    if _cached_departures is not None:
+        write_to_display(_cached_departures)
+        return True
+    print('update_arriving_animation: no cached data, skipping redraw')
+    return False
 
 
 # Track last displayed minute to avoid unnecessary updates
