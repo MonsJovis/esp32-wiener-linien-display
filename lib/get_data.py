@@ -55,7 +55,8 @@ def parse_server_time(server_time):
         time_clean = time_part.split('.')[0]
 
         return date_part + ' ' + time_clean
-    except:
+    except Exception as e:
+        print('Error parsing server_time:', e)
         return ''
 
 
@@ -160,11 +161,6 @@ def transform_response(api_response):
     server_time = api_response.get('message', {}).get('serverTime', '')
     locale_timestamp = parse_server_time(server_time)
 
-    # Clear the large response from memory
-    del api_response
-    del monitors
-    collect()
-
     return {
         'data': result_data,
         'localeTimestamp': locale_timestamp,
@@ -230,7 +226,8 @@ def make_request():
         print('Response code:', response.status_code)
 
         if response.status_code != 200:
-            print('Error: Non-200 response')
+            print('Error: Non-200 response, status:', response.status_code)
+            response.close()
             return None
 
         # Stream JSON parsing - read directly from socket
