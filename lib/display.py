@@ -147,7 +147,7 @@ def _shorten_destination(towards):
         'ANSCHÜTZGASSE': 'Anschuetzg.',
         'UNTER ST. VEIT U': 'Unter St. V.',
         'WESTBAHNHOF S U': 'Westbahnhof',
-        'HÜTTELDORF': 'Huetteldorf',
+        'HÜTTELDORF': 'Hütteldorf',
         'KLINIK PENZING': 'Kl. Penzing',
         'URBAN LORITZ PLATZ': 'U. Loritz Pl.',
     }
