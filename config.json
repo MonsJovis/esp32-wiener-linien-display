@@ -1,0 +1,34 @@
+{
+  "stops": [
+    {
+      "diva": "60201438",
+      "lines": {
+        "49": [],
+        "N49": ["R"],
+        "47A": []
+      }
+    },
+    {
+      "diva": "60200956",
+      "lines": {
+        "U4": ["H"]
+      }
+    },
+    {
+      "diva": "60200113",
+      "lines": {
+        "52": ["R"]
+      }
+    }
+  ],
+  "line_priority": ["49", "N49", "U4", "47A", "52"],
+  "update_interval": 30,
+  "animation_interval": 4,
+  "full_refresh_interval": 40,
+  "wlan": {
+    "timeout": 60,
+    "reconnect_delay": 5,
+    "max_retries": 10
+  },
+  "watchdog_timeout": 90000
+}

@@ -1,11 +1,12 @@
-import network
+"""
+Timezone and NTP time synchronization module.
+Wi-Fi connection is now handled by wifi_manager.py.
+"""
+
 import ntptime
 import utime
 from utime import sleep
-from lib.secrets import get_wifi_secrets
 
-WIFI_CONNECTION_ATTEMPTS = 10
-WIFI_CONNECTION_RETRY_WAIT_SEC = 1
 NTP_RETRY_ATTEMPTS = 3
 NTP_RETRY_DELAY_SEC = 2
 
@@ -67,44 +68,4 @@ def sync_time():
             print('NTP time sync failed (attempt {}/{}):'.format(attempt + 1, NTP_RETRY_ATTEMPTS), e)
             if attempt < NTP_RETRY_ATTEMPTS - 1:
                 sleep(NTP_RETRY_DELAY_SEC)
-    return False
-
-def init_wifi(wdt=None):
-    """Initialize Wi-Fi connection with retry logic.
-
-    Args:
-        wdt: Optional watchdog timer to feed during connection attempts.
-
-    Returns:
-        True if connected successfully, False otherwise.
-    """
-    # Get Wi-Fi credentials
-    secrets = get_wifi_secrets()
-
-    wlan = network.WLAN(network.STA_IF)
-
-    # Try to connect to the network (max 10 attempts)
-    for _ in range(WIFI_CONNECTION_ATTEMPTS):
-        # Feed watchdog if provided to prevent reset during long connection attempts
-        if wdt is not None:
-            wdt.feed()
-
-        # Activate the network interface
-        wlan.active(True)
-
-        # Connect to your network
-        try:
-            wlan.connect(secrets[0], secrets[1])
-        except Exception as e:
-            print('Error while connecting to Wi-Fi')
-            print(e)
-
-        if wlan.isconnected():
-            # Sync time via NTP after successful connection
-            sync_time()
-            return True
-
-        print('Not connected to Wi-Fi yet. Trying again in {} second...'.format(WIFI_CONNECTION_RETRY_WAIT_SEC))
-        sleep(WIFI_CONNECTION_RETRY_WAIT_SEC)
-
     return False

@@ -1,33 +1,25 @@
 import requests
 from gc import collect
+from lib.config import get_stops
 
 # Wiener Linien Open Government Data API
 API_BASE_URL = 'https://www.wienerlinien.at/ogd_realtime/monitor'
 
-# DIVA IDs for stops to monitor
-DIVA_IDS = ['60201438', '60200956', '60200113']
 
-# Filter configuration: {diva: {line_name: [directions]}}
-# Empty direction list means all directions
-# Direction values: 'R' (outbound), 'H' (inbound)
-LINE_FILTERS = {
-    '60201438': {
-        '49': [],           # All directions
-        'N49': ['R'],       # Only outbound
-        '47A': [],          # All directions
-    },
-    '60200956': {
-        'U4': ['H'],        # Only inbound
-    },
-    '60200113': {
-        '52': ['R'],        # Only outbound
-    },
-}
+def get_diva_ids():
+    """Get list of DIVA IDs from configuration."""
+    return [stop['diva'] for stop in get_stops()]
+
+
+def get_line_filters():
+    """Get line filters from configuration as {diva: {line_name: [directions]}}."""
+    return {stop['diva']: stop['lines'] for stop in get_stops()}
 
 
 def build_api_url():
     """Build the Wiener Linien API URL with diva parameters."""
-    params = '&'.join('diva=' + diva for diva in DIVA_IDS)
+    diva_ids = get_diva_ids()
+    params = '&'.join('diva=' + diva for diva in diva_ids)
     return API_BASE_URL + '?' + params
 
 
@@ -104,6 +96,7 @@ def transform_response(api_response):
     stops_by_diva = {}
 
     monitors = api_response.get('data', {}).get('monitors', [])
+    line_filters = get_line_filters()
 
     for monitor in monitors:
         # Extract stop info
@@ -112,10 +105,10 @@ def transform_response(api_response):
         stop_name = props.get('title', '')
 
         # Skip if this DIVA is not in our filter
-        if diva not in LINE_FILTERS:
+        if diva not in line_filters:
             continue
 
-        allowed_lines = LINE_FILTERS[diva]
+        allowed_lines = line_filters[diva]
 
         for line in monitor.get('lines', []):
             line_name = line.get('name', '')

@@ -8,6 +8,7 @@ from lib.utils import two_digits
 from lib.ssd1683 import SSD1683
 from lib.fonts import draw_text_24, draw_text_16, FONT_24_HEIGHT, FONT_16_HEIGHT
 from lib.init_wifi import get_timezone_offset
+from lib.config import get_full_refresh_interval, get_line_priority
 
 DISPLAY_WIDTH = 400
 DISPLAY_HEIGHT = 300
@@ -40,7 +41,6 @@ epd = None
 
 # Refresh management
 _refresh_count = 0
-FULL_REFRESH_INTERVAL = 40  # Do full refresh every N updates to clear ghosting
 
 # Animation state for arriving indicator
 _arriving_indicator_state = False  # False=bottom-left, True=top-right
@@ -190,7 +190,7 @@ def write_to_display(data):
     lines = [line for stop in data for line in stop['lines']]
 
     # Sort by priority (preferred lines first), then by direction (R before H)
-    priority_order = ['49', 'N49', 'U4', '47A', '52']
+    priority_order = get_line_priority()
     lines = sorted(
         lines,
         key=lambda line: (
@@ -286,7 +286,8 @@ def write_to_display(data):
 
     # Refresh display - use partial refresh normally, full refresh periodically
     _refresh_count += 1
-    if _refresh_count >= FULL_REFRESH_INTERVAL:
+    full_refresh_interval = get_full_refresh_interval()
+    if _refresh_count >= full_refresh_interval:
         print('write_to_display: full refresh (count={})'.format(_refresh_count))
         epd.show()  # Full refresh to clear ghosting
         _refresh_count = 0
@@ -303,6 +304,40 @@ def clear_cached_departures():
     global _cached_departures
     _cached_departures = None
     gc.collect()
+
+
+def draw_wifi_status(connected, stale_data=False):
+    """
+    Draw Wi-Fi status indicator in bottom-right corner.
+
+    Args:
+        connected: True if Wi-Fi is connected
+        stale_data: True if displaying stale/cached data
+    """
+    global epd
+    x = DISPLAY_WIDTH - 30
+    y = LAST_ROW_TOP_OFFSET
+
+    # Clear the status area first
+    epd.fill_rect(x - 12, y, 40, 16, COLOR_WHITE)
+
+    if connected:
+        # Draw signal bars (3 bars of increasing height)
+        for i in range(3):
+            bar_height = 4 + i * 3  # Heights: 4, 7, 10
+            bar_x = x + i * 6
+            bar_y = y + 8 - bar_height
+            epd.fill_rect(bar_x, bar_y, 4, bar_height, COLOR_BLACK)
+    else:
+        # Draw X for disconnected
+        epd.text('X', x + 4, y, COLOR_BLACK)
+
+    if stale_data:
+        # Draw asterisk to indicate stale data
+        epd.text('*', x - 10, y, COLOR_BLACK)
+
+    # Partial refresh to show status update
+    epd.show_partial()
 
 
 def _has_arriving_departures(data):
@@ -381,10 +416,12 @@ def update_current_time():
     current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
-    # Draw "updated X sec ago" (bottom right) only if > 20 seconds
+    # Draw "updated X sec ago" directly after the time
     if should_show_seconds_ago:
-        updated_text = 'updated {} sec ago'.format(seconds_ago_bucket)
-        updated_x = DISPLAY_WIDTH - len(updated_text) * BUILTIN_FONT_WIDTH - TEXT_LEFT_OFFSET
+        updated_text = '({}s ago)'.format(seconds_ago_bucket)
+        # Position right after the time text with a small gap
+        time_width = len(current_time_text) * BUILTIN_FONT_WIDTH
+        updated_x = TEXT_LEFT_OFFSET + time_width + 8  # 8px gap
         epd.text(updated_text, updated_x, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
     _last_displayed_minute = current_minute
