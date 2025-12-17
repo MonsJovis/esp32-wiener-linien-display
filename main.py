@@ -3,7 +3,6 @@ Main entry point for ESP32 Wiener Linien departure display.
 """
 
 import utime
-import machine
 from machine import WDT
 
 from lib.config import get_update_interval, get_animation_interval, get_wlan_config, get_watchdog_timeout

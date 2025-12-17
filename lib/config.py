@@ -15,8 +15,8 @@ def load_config():
         try:
             with open('config.json', 'r') as f:
                 _config = ujson.load(f)
-        except OSError:
-            raise RuntimeError('config.json not found. Please create it from config.json.example')
+        except OSError as err:
+            raise RuntimeError('config.json not found. Please create it from config.json.example') from err
     return _config
 
 

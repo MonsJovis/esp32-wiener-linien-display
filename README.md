@@ -4,6 +4,7 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
 
 ![MicroPython](https://img.shields.io/badge/MicroPython-1.24-blue)
 ![ESP32-S3](https://img.shields.io/badge/ESP32--S3-CrowPanel%204.2%22-green)
+[![Lint](https://github.com/monsjovis/esp-public-transport-screen/actions/workflows/lint.yml/badge.svg)](https://github.com/monsjovis/esp-public-transport-screen/actions/workflows/lint.yml)
 
 ## Features
 
@@ -203,6 +204,19 @@ https://www.wienerlinien.at/ogd_realtime/monitor?diva=60201438&diva=60200956
 ```
 
 The response is transformed and filtered on-device to minimize memory usage.
+
+## Development
+
+### Linting
+
+This project uses [ruff](https://docs.astral.sh/ruff/) for code quality checks:
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+```
+
+Linting runs automatically on push/PR to main via GitHub Actions.
 
 ## Troubleshooting
 

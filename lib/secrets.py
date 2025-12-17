@@ -18,6 +18,6 @@ def get_wifi_secrets():
 
     try:
         return secrets['wifi']['ssid'], secrets['wifi']['password']
-    except (KeyError, TypeError) as e:
+    except (KeyError, TypeError):
         print('Error: secrets.json missing wifi.ssid or wifi.password')
-        raise ValueError('Invalid secrets.json format. Expected: {"wifi": {"ssid": "...", "password": "..."}}')
+        raise ValueError('Invalid secrets.json format. Expected: {"wifi": {"ssid": "...", "password": "..."}}') from None

@@ -1,0 +1,19 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = [".venv", "boot.py"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes (undefined vars, unused imports)
+    "W",      # pycodestyle warnings
+    "B",      # flake8-bugbear (common bugs)
+]
+ignore = [
+    "E501",   # line too long
+]
+
+# Ignore undefined name errors for MicroPython modules
+[tool.ruff.lint.per-file-ignores]
+"*.py" = ["F821"]

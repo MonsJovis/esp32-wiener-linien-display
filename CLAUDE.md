@@ -105,6 +105,15 @@ All settings are in `config.json`:
 
 **Modifying monitored lines**: Edit `config.json` - no code changes needed.
 
+**Linting**: This project uses [ruff](https://docs.astral.sh/ruff/) for code quality:
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+```
+
+Linting runs automatically on push/PR to main via GitHub Actions.
+
 ## Key Modules
 
 - **config.py**: Lazy-loads and caches config.json, provides getter functions
