@@ -3,6 +3,7 @@ Main entry point for ESP32 Wiener Linien departure display.
 """
 
 import utime
+import machine
 from machine import WDT
 
 from lib.config import get_update_interval, get_animation_interval, get_wlan_config, get_watchdog_timeout
@@ -97,6 +98,7 @@ def start_main_loop():
 
     DATA_REFRESH_INTERVAL = get_update_interval()
     ANIMATION_INTERVAL = get_animation_interval()
+    STALE_RESTART_THRESHOLD = 300  # Restart if stale for 5 minutes
 
     while True:
         wdt.feed()
@@ -154,6 +156,11 @@ def start_main_loop():
             using_stale_data = False
             last_data_fetch = current_time
             last_animation_toggle = current_time
+
+        # Check if stale for too long - trigger restart
+        if using_stale_data and (current_time - last_data_fetch) > STALE_RESTART_THRESHOLD:
+            print('Stale for {}s, restarting...'.format(current_time - last_data_fetch))
+            machine.reset()
 
         # Toggle arriving indicator animation at interval
         if has_displayed_data and current_time - last_animation_toggle >= ANIMATION_INTERVAL:
