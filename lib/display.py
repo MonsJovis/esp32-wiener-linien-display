@@ -48,6 +48,10 @@ _arriving_indicator_state = False  # False=bottom-left, True=top-right
 # Cached departure data for animation redraws
 _cached_departures = None
 
+# Wi-Fi status state (for redrawing after display updates)
+_wifi_connected = False
+_wifi_stale_data = False
+
 
 def init_display():
     """Initialize the e-paper display"""
@@ -275,7 +279,7 @@ def write_to_display(data):
 
             current_y += row_height
 
-    # Store the update time for "updated X seconds ago" display
+    # Store the update time for stale indicator
     global _last_update_time
     _last_update_time = utime.time()
 
@@ -283,6 +287,12 @@ def write_to_display(data):
     local_time = utime.localtime(utime.time() + get_timezone_offset())
     current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
+
+    # Draw stale indicator (center) if data is stale
+    _draw_stale_indicator()
+
+    # Draw Wi-Fi status (bottom right) - uses cached state
+    _draw_wifi_status_internal()
 
     # Refresh display - use partial refresh normally, full refresh periodically
     _refresh_count += 1
@@ -306,22 +316,65 @@ def clear_cached_departures():
     gc.collect()
 
 
-def draw_wifi_status(connected, stale_data=False):
+def _draw_stale_indicator():
     """
-    Draw Wi-Fi status indicator in bottom-right corner.
+    Draw centered stale data warning with triangle icon and elapsed time.
+    Called internally by display update functions.
+    """
+    global epd, _wifi_stale_data, _last_update_time
 
-    Args:
-        connected: True if Wi-Fi is connected
-        stale_data: True if displaying stale/cached data
+    center_x = DISPLAY_WIDTH // 2
+    y = LAST_ROW_TOP_OFFSET
+
+    # Calculate seconds since last update
+    seconds_ago = utime.time() - _last_update_time if _last_update_time > 0 else 0
+
+    # Build the text: "STALE Xs" where X is seconds
+    stale_text = 'STALE {}s'.format(seconds_ago) if _wifi_stale_data else ''
+
+    # Calculate total width: triangle (12px) + gap (2px) + text
+    text_width = len(stale_text) * BUILTIN_FONT_WIDTH if stale_text else 0
+    indicator_width = 14 + text_width if _wifi_stale_data else 100  # Clear area
+
+    # Clear center area
+    clear_x = center_x - indicator_width // 2
+    epd.fill_rect(clear_x, y, indicator_width, BUILTIN_FONT_HEIGHT + 2, COLOR_WHITE)
+
+    if not _wifi_stale_data:
+        return
+
+    # Position for warning triangle
+    tri_x = center_x - indicator_width // 2
+    tri_y = y
+
+    # Draw warning triangle outline (11px wide, 6px tall)
+    for i in range(6):
+        line_width = 1 + i * 2
+        line_x = tri_x + 5 - i
+        epd.hline(line_x, tri_y + i, line_width, COLOR_BLACK)
+
+    # Exclamation mark inside triangle
+    epd.vline(tri_x + 5, tri_y + 1, 2, COLOR_BLACK)
+    epd.pixel(tri_x + 5, tri_y + 4, COLOR_BLACK)
+
+    # "STALE Xs" text after triangle
+    text_x = tri_x + 14
+    epd.text(stale_text, text_x, tri_y, COLOR_BLACK)
+
+
+def _draw_wifi_status_internal():
     """
-    global epd
+    Draw Wi-Fi status indicator in bottom-right corner using cached state.
+    Called internally by display update functions.
+    """
+    global epd, _wifi_connected
     x = DISPLAY_WIDTH - 30
     y = LAST_ROW_TOP_OFFSET
 
     # Clear the status area first
-    epd.fill_rect(x - 12, y, 40, 16, COLOR_WHITE)
+    epd.fill_rect(x, y, 22, 12, COLOR_WHITE)
 
-    if connected:
+    if _wifi_connected:
         # Draw signal bars (3 bars of increasing height)
         for i in range(3):
             bar_height = 4 + i * 3  # Heights: 4, 7, 10
@@ -332,9 +385,23 @@ def draw_wifi_status(connected, stale_data=False):
         # Draw X for disconnected
         epd.text('X', x + 4, y, COLOR_BLACK)
 
-    if stale_data:
-        # Draw asterisk to indicate stale data
-        epd.text('*', x - 10, y, COLOR_BLACK)
+
+def draw_wifi_status(connected, stale_data=False):
+    """
+    Update Wi-Fi status state and draw indicator in bottom-right corner.
+
+    Args:
+        connected: True if Wi-Fi is connected
+        stale_data: True if displaying stale/cached data (stored for stale indicator)
+    """
+    global _wifi_connected, _wifi_stale_data
+
+    # Store state for redraws
+    _wifi_connected = connected
+    _wifi_stale_data = stale_data
+
+    # Draw the indicator
+    _draw_wifi_status_internal()
 
     # Partial refresh to show status update
     epd.show_partial()
@@ -377,55 +444,35 @@ def update_arriving_animation():
 # Track last displayed minute to avoid unnecessary updates
 _last_displayed_minute = -1
 
-# Track last data update timestamp for "updated X seconds ago" display
+# Track last data update timestamp
 _last_update_time = 0
 
 
-# Width reserved for "updated X sec ago" text (max ~18 chars)
-UPDATED_TEXT_MAX_WIDTH = 18 * BUILTIN_FONT_WIDTH
-
-# Track last displayed "seconds ago" to avoid unnecessary refreshes
-_last_displayed_seconds_ago = -1
-
-
 def update_current_time():
-    """Update current time and 'updated X sec ago' display. Returns True if display was updated."""
-    global epd, _last_displayed_minute, _last_update_time, _last_displayed_seconds_ago
+    """Update current time display and stale indicator. Returns True if display was updated."""
+    global epd, _last_displayed_minute
 
     local_time = utime.localtime(utime.time() + get_timezone_offset())
     current_minute = local_time[4]
 
-    # Calculate seconds since last data update
-    seconds_ago = utime.time() - _last_update_time if _last_update_time > 0 else 0
-
-    # Determine if we need to update the "X sec ago" display (only after 31s, update every 5s)
-    should_show_seconds_ago = seconds_ago > 31
-    seconds_ago_bucket = (seconds_ago // 5) * 5 if should_show_seconds_ago else -1
-
-    # Check if anything needs updating
-    minute_changed = current_minute != _last_displayed_minute
-    seconds_display_changed = seconds_ago_bucket != _last_displayed_seconds_ago
-
-    if not minute_changed and not seconds_display_changed:
+    # Check if minute changed
+    if current_minute == _last_displayed_minute:
         return False
 
     # Clear the bottom row
-    epd.fill_rect(TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, DISPLAY_WIDTH - 2 * TEXT_LEFT_OFFSET, BUILTIN_FONT_HEIGHT, COLOR_WHITE)
+    epd.fill_rect(TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, DISPLAY_WIDTH - 2 * TEXT_LEFT_OFFSET, BUILTIN_FONT_HEIGHT + 2, COLOR_WHITE)
 
     # Draw current time (bottom left)
     current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
 
-    # Draw "updated X sec ago" directly after the time
-    if should_show_seconds_ago:
-        updated_text = '({}s ago)'.format(seconds_ago_bucket)
-        # Position right after the time text with a small gap
-        time_width = len(current_time_text) * BUILTIN_FONT_WIDTH
-        updated_x = TEXT_LEFT_OFFSET + time_width + 8  # 8px gap
-        epd.text(updated_text, updated_x, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
+    # Draw stale indicator (center) if data is stale
+    _draw_stale_indicator()
+
+    # Redraw Wi-Fi status (bottom right) - was cleared with the row
+    _draw_wifi_status_internal()
 
     _last_displayed_minute = current_minute
-    _last_displayed_seconds_ago = seconds_ago_bucket
 
     # Partial refresh for the update
     epd.show_partial()
