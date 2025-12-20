@@ -34,7 +34,6 @@ def initialize():
 
     # Initialize hardware abstraction
     panel = CrowPanel()
-    panel.led_on()
 
     # Initialize display
     print('Initializing display...')
@@ -118,6 +117,7 @@ def start_main_loop():
             if not wlan.reconnect(delay=wlan_config['reconnect_delay_sec']):
                 print('Reconnection failed')
                 using_stale_data = True
+                panel.led_on()
             else:
                 print('Reconnected successfully')
 
@@ -143,6 +143,7 @@ def start_main_loop():
                 if not has_displayed_data:
                     write_error_to_display('Error fetching data')
                 using_stale_data = True
+                panel.led_on()
                 last_data_fetch = current_time
                 utime.sleep(1)
                 continue
@@ -154,6 +155,7 @@ def start_main_loop():
 
             has_displayed_data = True
             using_stale_data = False
+            panel.led_off()
             last_data_fetch = current_time
             last_animation_toggle = current_time
 
