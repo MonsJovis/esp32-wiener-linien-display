@@ -103,15 +103,20 @@ Edit `config.json` to customize which stops and lines to monitor:
     }
   ],
   "line_priority": ["49", "N49", "U4", "47A", "52"],
-  "update_interval": 30,
-  "animation_interval": 4,
-  "full_refresh_interval": 40,
+  "destination_shortnames": {
+    "HEILIGENSTADT": "Heiligenst.",
+    "WESTBAHNHOF S U": "Westbahnhof"
+  },
+  "update_interval_sec": 30,
+  "animation_interval_sec": 4,
+  "full_refresh_interval_cycles": 40,
   "wlan": {
-    "timeout": 60,
-    "reconnect_delay": 5,
+    "timeout_sec": 60,
+    "reconnect_delay_sec": 5,
     "max_retries": 10
   },
-  "watchdog_timeout": 90000
+  "stale_restart_threshold_sec": 300,
+  "watchdog_timeout_ms": 90000
 }
 ```
 
@@ -144,12 +149,15 @@ mpremote connect /dev/ttyUSB0 cp main.py config.json secrets.json :
 | `stops[].diva` | Stop DIVA ID (from Wiener Linien API) | - |
 | `stops[].lines` | Object mapping line names to directions | - |
 | `line_priority` | Display order for lines | `["49", "N49", "U4", "47A", "52"]` |
-| `update_interval` | Data refresh interval in seconds | `30` |
-| `animation_interval` | Arriving indicator toggle in seconds | `4` |
-| `full_refresh_interval` | Partial refreshes before full refresh | `40` |
-| `wlan.timeout` | Wi-Fi connection timeout in seconds | `60` |
-| `wlan.reconnect_delay` | Delay before reconnection attempt | `5` |
-| `watchdog_timeout` | Watchdog timeout in milliseconds | `90000` |
+| `destination_shortnames` | Mapping of destination names to abbreviations | `{}` |
+| `update_interval_sec` | Data refresh interval in seconds | `30` |
+| `animation_interval_sec` | Arriving indicator toggle in seconds | `4` |
+| `full_refresh_interval_cycles` | Partial refreshes before full refresh | `40` |
+| `wlan.timeout_sec` | Wi-Fi connection timeout in seconds | `60` |
+| `wlan.reconnect_delay_sec` | Delay before reconnection attempt in seconds | `5` |
+| `wlan.max_retries` | Maximum reconnection attempts | `10` |
+| `stale_restart_threshold_sec` | Restart device after stale for this many seconds | `300` |
+| `watchdog_timeout_ms` | Watchdog timeout in milliseconds | `90000` |
 
 ### Line Filters
 
@@ -174,7 +182,8 @@ Use the [Wiener Linien OGD API](https://www.data.gv.at/katalog/dataset/wiener-li
    - Render to e-paper with partial refresh
    - Draw Wi-Fi status indicator
 3. **Animation**: Toggle arriving indicator every 4 seconds
-4. **Watchdog**: 90-second timeout prevents hangs
+4. **Stale data**: Auto-restart after 5 minutes without fresh data
+5. **Watchdog**: 90-second timeout prevents hangs
 
 ### E-Paper Refresh Strategy
 
@@ -192,8 +201,7 @@ Use the [Wiener Linien OGD API](https://www.data.gv.at/katalog/dataset/wiener-li
 
 - **Signal bars** (bottom-right): Wi-Fi connected
 - **X** (bottom-right): Wi-Fi disconnected
-- **\*** (bottom-right): Displaying stale/cached data
-- **(Xs ago)** (next to time): Data age when stale
+- **Warning triangle + "STALE Xs"** (center): Displaying stale data with age in seconds
 
 ## API
 
@@ -225,23 +233,23 @@ Linting runs automatically on push/PR to main via GitHub Actions.
 - Check `secrets.json` credentials
 - Ensure 2.4GHz network (ESP32 doesn't support 5GHz)
 - Check signal strength
-- Increase `wlan.timeout` in `config.json`
+- Increase `wlan.timeout_sec` in `config.json`
 
 ### Memory Errors
 
 - The device runs garbage collection before HTTP requests
 - SPIRAM firmware recommended for better memory management
-- Reduce `full_refresh_interval` if issues persist
+- Reduce `full_refresh_interval_cycles` if issues persist
 
 ### Display Ghosting
 
-- Decrease `full_refresh_interval` in `config.json`
+- Decrease `full_refresh_interval_cycles` in `config.json`
 - Or trigger manual full refresh by power cycling
 
 ### Wi-Fi Keeps Disconnecting
 
 - The device automatically reconnects
-- Increase `wlan.reconnect_delay` if router needs more time
+- Increase `wlan.reconnect_delay_sec` if router needs more time
 - Check router logs for connection issues
 
 ## License

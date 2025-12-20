@@ -62,11 +62,13 @@ All settings are in `config.json`:
     {"diva": "60200956", "lines": {"U4": ["H"]}}
   ],
   "line_priority": ["49", "N49", "U4", "47A", "52"],
-  "update_interval": 30,
-  "animation_interval": 4,
-  "full_refresh_interval": 40,
-  "wlan": {"timeout": 60, "reconnect_delay": 5},
-  "watchdog_timeout": 90000
+  "destination_shortnames": {"HEILIGENSTADT": "Heiligenst."},
+  "update_interval_sec": 30,
+  "animation_interval_sec": 4,
+  "full_refresh_interval_cycles": 40,
+  "wlan": {"timeout_sec": 60, "reconnect_delay_sec": 5, "max_retries": 10},
+  "stale_restart_threshold_sec": 300,
+  "watchdog_timeout_ms": 90000
 }
 ```
 
@@ -81,7 +83,10 @@ All settings are in `config.json`:
   - 24px: Line names (U4, 49, N49, etc.)
   - 16px: Departure times (5', 12', etc.)
   - 8px: Built-in font for destinations and status
-- **Status indicators**: Wi-Fi signal bars, stale data asterisk (top-right)
+- **Status indicators** (bottom row):
+  - Left: Current time (HH:MM)
+  - Center: Stale data warning (triangle icon + "STALE Xs") when data is stale
+  - Right: Wi-Fi signal bars (connected) or X (disconnected)
 
 ## Development
 
