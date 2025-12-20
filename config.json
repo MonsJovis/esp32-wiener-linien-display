@@ -30,5 +30,6 @@
     "reconnect_delay": 5,
     "max_retries": 10
   },
-  "watchdog_timeout": 90000
+  "watchdog_timeout": 90000,
+  "stale_restart_threshold": 300
 }

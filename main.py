@@ -6,7 +6,7 @@ import utime
 import machine
 from machine import WDT
 
-from lib.config import get_update_interval, get_animation_interval, get_wlan_config, get_watchdog_timeout
+from lib.config import get_update_interval, get_animation_interval, get_wlan_config, get_watchdog_timeout, get_stale_restart_threshold
 from lib.crowpanel import CrowPanel
 from lib.wifi_manager import WLANManager
 from lib.secrets import get_wifi_secrets
@@ -98,7 +98,7 @@ def start_main_loop():
 
     DATA_REFRESH_INTERVAL = get_update_interval()
     ANIMATION_INTERVAL = get_animation_interval()
-    STALE_RESTART_THRESHOLD = 300  # Restart if stale for 5 minutes
+    STALE_RESTART_THRESHOLD = get_stale_restart_threshold()
 
     while True:
         wdt.feed()

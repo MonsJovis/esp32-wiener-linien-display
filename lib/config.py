@@ -53,3 +53,8 @@ def get_wlan_config():
 def get_watchdog_timeout():
     """Get watchdog timeout in milliseconds."""
     return load_config()['watchdog_timeout']
+
+
+def get_stale_restart_threshold():
+    """Get stale data restart threshold in seconds."""
+    return load_config()['stale_restart_threshold']
