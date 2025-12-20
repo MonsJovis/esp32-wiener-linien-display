@@ -1,5 +1,5 @@
 #!/bin/bash
-PORT=${1:-/dev/cu.usbserial-140}
+PORT=${1:-/dev/cu.usbserial-1140}
 
 echo "Deploying to $PORT..."
 
