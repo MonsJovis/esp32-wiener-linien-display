@@ -49,7 +49,7 @@ def initialize():
     wlan = WLANManager(
         ssid=secrets[0],
         password=secrets[1],
-        timeout=wlan_config['timeout'],
+        timeout=wlan_config['timeout_sec'],
         wdt=wdt
     )
 
@@ -115,7 +115,7 @@ def start_main_loop():
         if not wlan.is_connected():
             print('Wi-Fi disconnected, reconnecting...')
             wlan_config = get_wlan_config()
-            if not wlan.reconnect(delay=wlan_config['reconnect_delay']):
+            if not wlan.reconnect(delay=wlan_config['reconnect_delay_sec']):
                 print('Reconnection failed')
                 using_stale_data = True
             else:

@@ -32,29 +32,34 @@ def get_line_priority():
 
 def get_update_interval():
     """Get data refresh interval in seconds."""
-    return load_config()['update_interval']
+    return load_config()['update_interval_sec']
 
 
 def get_animation_interval():
     """Get animation toggle interval in seconds."""
-    return load_config()['animation_interval']
+    return load_config()['animation_interval_sec']
 
 
 def get_full_refresh_interval():
     """Get number of updates between full e-paper refreshes."""
-    return load_config()['full_refresh_interval']
+    return load_config()['full_refresh_interval_cycles']
 
 
 def get_wlan_config():
-    """Get Wi-Fi configuration (timeout, reconnect_delay, max_retries)."""
+    """Get Wi-Fi configuration (timeout_sec, reconnect_delay_sec, max_retries)."""
     return load_config()['wlan']
 
 
 def get_watchdog_timeout():
     """Get watchdog timeout in milliseconds."""
-    return load_config()['watchdog_timeout']
+    return load_config()['watchdog_timeout_ms']
 
 
 def get_stale_restart_threshold():
     """Get stale data restart threshold in seconds."""
-    return load_config()['stale_restart_threshold']
+    return load_config()['stale_restart_threshold_sec']
+
+
+def get_destination_shortnames():
+    """Get destination name abbreviations mapping."""
+    return load_config().get('destination_shortnames', {})

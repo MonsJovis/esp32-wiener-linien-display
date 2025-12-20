@@ -21,15 +21,27 @@
       }
     }
   ],
+
   "line_priority": ["49", "N49", "U4", "47A", "52"],
-  "update_interval": 30,
-  "animation_interval": 4,
-  "full_refresh_interval": 40,
+  "destination_shortnames": {
+    "HEILIGENSTADT": "Heiligenst.",
+    "ANSCHÜTZGASSE": "Anschuetzg.",
+    "UNTER ST. VEIT U": "Unter St. V.",
+    "WESTBAHNHOF S U": "Westbahnhof",
+    "HÜTTELDORF": "Huetteldorf",
+    "KLINIK PENZING": "Kl. Penzing",
+    "URBAN LORITZ PLATZ": "U. Loritz Pl."
+  },
+
+  "update_interval_sec": 30,
+  "animation_interval_sec": 4,
+  "full_refresh_interval_cycles": 40,
+
   "wlan": {
-    "timeout": 60,
-    "reconnect_delay": 5,
+    "timeout_sec": 60,
+    "reconnect_delay_sec": 5,
     "max_retries": 10
   },
-  "watchdog_timeout": 90000,
-  "stale_restart_threshold": 300
+  "stale_restart_threshold_sec": 300,
+  "watchdog_timeout_ms": 90000
 }

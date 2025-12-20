@@ -8,7 +8,7 @@ from lib.utils import two_digits
 from lib.ssd1683 import SSD1683
 from lib.fonts import draw_text_24, draw_text_16, FONT_24_HEIGHT, FONT_16_HEIGHT
 from lib.init_wifi import get_timezone_offset
-from lib.config import get_full_refresh_interval, get_line_priority
+from lib.config import get_full_refresh_interval, get_line_priority, get_destination_shortnames
 
 DISPLAY_WIDTH = 400
 DISPLAY_HEIGHT = 300
@@ -152,17 +152,8 @@ def _shorten_destination(towards):
     # Take first part before comma
     towards = towards.split(',')[0].strip()
 
-    # Shorten known long names
-    shortnames = {
-        'HEILIGENSTADT': 'Heiligenst.',
-        'ANSCHÜTZGASSE': 'Anschuetzg.',
-        'UNTER ST. VEIT U': 'Unter St. V.',
-        'WESTBAHNHOF S U': 'Westbahnhof',
-        'HÜTTELDORF': 'Hütteldorf',
-        'KLINIK PENZING': 'Kl. Penzing',
-        'URBAN LORITZ PLATZ': 'U. Loritz Pl.',
-    }
-
+    # Shorten known long names from config
+    shortnames = get_destination_shortnames()
     upper = towards.upper()
     if upper in shortnames:
         towards = shortnames[upper]
