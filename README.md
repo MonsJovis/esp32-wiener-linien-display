@@ -6,6 +6,8 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
 ![ESP32-S3](https://img.shields.io/badge/ESP32--S3-CrowPanel%204.2%22-green)
 [![Lint](https://github.com/monsjovis/esp-public-transport-screen/actions/workflows/lint.yml/badge.svg)](https://github.com/monsjovis/esp-public-transport-screen/actions/workflows/lint.yml)
 
+![Display showing departure times](display.jpg)
+
 ## Features
 
 - Real-time departure data from Wiener Linien API
