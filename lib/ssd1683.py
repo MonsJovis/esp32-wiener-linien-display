@@ -139,7 +139,14 @@ class SSD1683(FrameBuffer):
 
     def show(self):
         """Write framebuffer to display and do full refresh (flashes)"""
-        self._cmd(0x24)  # Write RAM
+        # Write to NEW RAM (current image)
+        self._cmd(0x24)
+        self._cs(0)
+        self._dc(1)
+        self._spi.write(self._buf)
+        self._cs(1)
+        # Write to OLD RAM (reference for next partial refresh)
+        self._cmd(0x26)
         self._cs(0)
         self._dc(1)
         self._spi.write(self._buf)
@@ -148,12 +155,19 @@ class SSD1683(FrameBuffer):
 
     def show_partial(self):
         """Write framebuffer to display and do partial refresh (minimal flashing)"""
-        self._cmd(0x24)  # Write RAM
+        # Write to NEW RAM (current image)
+        self._cmd(0x24)
         self._cs(0)
         self._dc(1)
         self._spi.write(self._buf)
         self._cs(1)
         self._update_partial()
+        # After partial refresh, sync OLD RAM so next partial has correct reference
+        self._cmd(0x26)
+        self._cs(0)
+        self._dc(1)
+        self._spi.write(self._buf)
+        self._cs(1)
 
     @property
     def width(self):
