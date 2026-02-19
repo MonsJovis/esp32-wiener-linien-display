@@ -35,7 +35,7 @@
 
   "update_interval_sec": 30,
   "animation_interval_sec": 4,
-  "full_refresh_interval_cycles": 40,
+  "full_refresh_interval_cycles": 10,
 
   "wlan": {
     "timeout_sec": 60,

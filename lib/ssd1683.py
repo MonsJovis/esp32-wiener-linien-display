@@ -87,6 +87,9 @@ class SSD1683(FrameBuffer):
 
     def _update(self):
         """Trigger full display refresh (causes flashing)"""
+        self._cmd(0x21)  # Display update control 1
+        self._dat(0x40)  # Bypass OLD RAM (not needed for full refresh)
+        self._dat(0x00)
         self._cmd(0x22)
         self._dat(0xF7)  # Full refresh mode
         self._cmd(0x20)
@@ -94,8 +97,11 @@ class SSD1683(FrameBuffer):
 
     def _update_partial(self):
         """Trigger partial display refresh (minimal flashing)"""
+        self._cmd(0x21)  # Display update control 1
+        self._dat(0x00)  # Enable OLD RAM for differential comparison
+        self._dat(0x00)
         self._cmd(0x22)
-        self._dat(0xDC)  # Partial refresh mode
+        self._dat(0xFC)  # Partial refresh with temperature load
         self._cmd(0x20)
         self._wait()
 
@@ -117,12 +123,15 @@ class SSD1683(FrameBuffer):
         self._cmd(0x12)  # Software reset
         self._wait()
 
+        self._cmd(0x18)  # Temperature sensor control
+        self._dat(0x80)  # Use built-in sensor
+
         self._cmd(0x21)  # Display update control
         self._dat(0x40)
         self._dat(0x00)
 
         self._cmd(0x3C)  # Border waveform
-        self._dat(0x05)
+        self._dat(0x01)
 
         self._cmd(0x11)  # Data entry mode
         self._dat(0x03)  # X increment, Y increment
@@ -140,12 +149,14 @@ class SSD1683(FrameBuffer):
     def show(self):
         """Write framebuffer to display and do full refresh (flashes)"""
         # Write to NEW RAM (current image)
+        self._cur(0, 0)
         self._cmd(0x24)
         self._cs(0)
         self._dc(1)
         self._spi.write(self._buf)
         self._cs(1)
         # Write to OLD RAM (reference for next partial refresh)
+        self._cur(0, 0)
         self._cmd(0x26)
         self._cs(0)
         self._dc(1)
@@ -156,13 +167,15 @@ class SSD1683(FrameBuffer):
     def show_partial(self):
         """Write framebuffer to display and do partial refresh (minimal flashing)"""
         # Write to NEW RAM (current image)
+        self._cur(0, 0)
         self._cmd(0x24)
         self._cs(0)
         self._dc(1)
         self._spi.write(self._buf)
         self._cs(1)
         self._update_partial()
-        # After partial refresh, sync OLD RAM so next partial has correct reference
+        # Sync OLD RAM for next differential comparison
+        self._cur(0, 0)
         self._cmd(0x26)
         self._cs(0)
         self._dc(1)

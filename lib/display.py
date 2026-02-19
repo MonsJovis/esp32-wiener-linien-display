@@ -435,7 +435,7 @@ _last_update_time = 0
 
 def update_current_time():
     """Update current time display and stale indicator. Returns True if display was updated."""
-    global epd, _last_displayed_minute
+    global epd, _last_displayed_minute, _refresh_count
 
     local_time = utime.localtime(utime.time() + get_timezone_offset())
     current_minute = local_time[4]
@@ -459,6 +459,13 @@ def update_current_time():
 
     _last_displayed_minute = current_minute
 
-    # Partial refresh for the update
-    epd.show_partial()
+    # Count this partial refresh toward full refresh threshold
+    _refresh_count += 1
+    full_refresh_interval = get_full_refresh_interval()
+    if _refresh_count >= full_refresh_interval:
+        print('update_current_time: full refresh (count={})'.format(_refresh_count))
+        epd.show()
+        _refresh_count = 0
+    else:
+        epd.show_partial()
     return True
