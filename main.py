@@ -13,7 +13,7 @@ from lib.secrets import get_wifi_secrets
 from lib.display import (
     init_display, write_error_to_display, write_start_msg_to_display,
     write_to_display, update_current_time, update_arriving_animation,
-    clear_cached_departures, draw_wifi_status
+    clear_cached_departures, set_wifi_state
 )
 from lib.get_data import get_data
 from lib.init_wifi import sync_time
@@ -149,8 +149,8 @@ def start_main_loop():
                 continue
 
             print('Writing to display...')
+            set_wifi_state(wlan.is_connected(), using_stale_data)
             write_to_display(data['data'])
-            draw_wifi_status(wlan.is_connected(), using_stale_data)
             wdt.feed()
 
             has_displayed_data = True

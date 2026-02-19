@@ -61,7 +61,7 @@ def init_display():
     epd.fill(COLOR_WHITE)
     # Single full refresh on startup to ensure clean slate
     epd.show()
-    _refresh_count = 0
+    _refresh_count = get_full_refresh_interval() - 1
 
 
 def _draw_centered_text(text, y):
@@ -377,25 +377,19 @@ def _draw_wifi_status_internal():
         epd.text('X', x + 4, y, COLOR_BLACK)
 
 
-def draw_wifi_status(connected, stale_data=False):
+def set_wifi_state(connected, stale_data=False):
     """
-    Update Wi-Fi status state and draw indicator in bottom-right corner.
+    Update Wi-Fi status state without drawing or refreshing.
+
+    Call this before write_to_display() so it renders with correct state.
 
     Args:
         connected: True if Wi-Fi is connected
         stale_data: True if displaying stale/cached data (stored for stale indicator)
     """
     global _wifi_connected, _wifi_stale_data
-
-    # Store state for redraws
     _wifi_connected = connected
     _wifi_stale_data = stale_data
-
-    # Draw the indicator
-    _draw_wifi_status_internal()
-
-    # Partial refresh to show status update
-    epd.show_partial()
 
 
 def _has_arriving_departures(data):
