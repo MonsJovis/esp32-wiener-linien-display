@@ -91,6 +91,9 @@ def start_main_loop():
     global wdt, wlan
 
     last_data_fetch = 0
+    # Tracks the last *successful* fetch separately from attempts so the
+    # stale-restart check below can never be reset by repeated failures.
+    last_successful_fetch = utime.time()
     last_animation_toggle = 0
     has_displayed_data = False
     using_stale_data = False
@@ -157,11 +160,15 @@ def start_main_loop():
             using_stale_data = False
             panel.led_off()
             last_data_fetch = current_time
+            last_successful_fetch = current_time
             last_animation_toggle = current_time
 
-        # Check if stale for too long - trigger restart
-        if using_stale_data and (current_time - last_data_fetch) > STALE_RESTART_THRESHOLD:
-            print('Stale for {}s, restarting...'.format(current_time - last_data_fetch))
+        # Check if stale for too long - trigger restart.
+        # Uses last_successful_fetch so repeated failures (which update
+        # last_data_fetch every retry) can't keep resetting this timer.
+        stale_for = current_time - last_successful_fetch
+        if using_stale_data and stale_for > STALE_RESTART_THRESHOLD:
+            print('Stale for {}s, restarting...'.format(stale_for))
             machine.reset()
 
         # Toggle arriving indicator animation at interval
