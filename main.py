@@ -129,7 +129,13 @@ def start_main_loop():
             wdt.feed()
             print('Fetching data...')
 
-            # Clear cached data to free memory before HTTP request
+            # MUST clear the cached departures here — on ESP32-S3 the
+            # ~110 KB free pool gets ENOMEM during TLS handshake otherwise.
+            # (Confirmed empirically: removing this caused every fetch
+            # after the first to fail with OSError -12 ENOMEM until reboot.)
+            # Side-effect: the arriving animation pauses while no cache is
+            # held, which means it's silent during failed fetches. That UX
+            # cost is real but smaller than the ENOMEM loop.
             clear_cached_departures()
 
             data = None

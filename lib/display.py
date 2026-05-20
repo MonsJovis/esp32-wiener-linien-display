@@ -45,8 +45,12 @@ _refresh_count = 0
 # Animation state for arriving indicator
 _arriving_indicator_state = False  # False=bottom-left, True=top-right
 
-# Cached departure data for animation redraws
-_cached_departures = None
+# Per-departure square anchors for the arriving animation.
+# Each entry is (time_x, times_y) for one countdown==0 cell on screen.
+# Kept tiny (~16 bytes per arriving line) so it can survive across fetches
+# without the ENOMEM pressure that the full departures dict caused.
+_arriving_positions = []
+ARRIVING_SQUARE_SIZE = 8
 
 # Wi-Fi status state (for redrawing after display updates)
 _wifi_connected = False
@@ -172,12 +176,13 @@ def _draw_separator_line(y):
 
 def write_to_display(data):
     """Render departure data to display with grouped layout by line."""
-    global epd, _refresh_count, _cached_departures
+    global epd, _refresh_count, _arriving_positions
 
     print('write_to_display: starting render, animation_state={}'.format(_arriving_indicator_state))
 
-    # Cache the data for animation redraws
-    _cached_departures = data
+    # Build a fresh list of arriving square anchors during this render;
+    # we swap it in at the end so animation tracks the just-drawn layout.
+    new_arriving_positions = []
 
     epd.fill(COLOR_WHITE)
 
@@ -253,14 +258,17 @@ def write_to_display(data):
                 time_x = TIMES_COLUMN_X + i * TIME_SLOT_WIDTH
 
                 if countdown == 0:
-                    # Animated square for arriving (alternates bottom-left / top-right)
-                    square_size = 8  # 8x8 square
+                    # Animated square for arriving (alternates bottom-left / top-right).
+                    # Remember the anchor so update_arriving_animation() can toggle it
+                    # in-place without re-rendering the whole display.
+                    new_arriving_positions.append((time_x, times_y))
+                    sq = ARRIVING_SQUARE_SIZE
                     if _arriving_indicator_state:
-                        # Top-right position (8px offset on x axis)
-                        epd.fill_rect(time_x + 8, times_y, square_size, square_size, COLOR_BLACK)
+                        # Top-right position (sq-px offset on x axis)
+                        epd.fill_rect(time_x + sq, times_y, sq, sq, COLOR_BLACK)
                     else:
                         # Bottom-left position
-                        epd.fill_rect(time_x, times_y + FONT_16_HEIGHT - square_size, square_size, square_size, COLOR_BLACK)
+                        epd.fill_rect(time_x, times_y + FONT_16_HEIGHT - sq, sq, sq, COLOR_BLACK)
                 else:
                     time_str = str(countdown) + "'"
                     # Right-align within slot: pad single digits
@@ -285,6 +293,11 @@ def write_to_display(data):
     # Draw Wi-Fi status (bottom right) - uses cached state
     _draw_wifi_status_internal()
 
+    # Publish the freshly-rendered arriving anchors for the animation toggler.
+    # Keep this list tiny — it survives across fetches (unlike the departures
+    # dict) so the animation can keep running through network failures.
+    _arriving_positions = new_arriving_positions
+
     # Refresh display - use partial refresh normally, full refresh periodically
     _refresh_count += 1
     full_refresh_interval = get_full_refresh_interval()
@@ -301,9 +314,13 @@ def write_to_display(data):
 
 
 def clear_cached_departures():
-    """Clear cached departure data to free memory."""
-    global _cached_departures
-    _cached_departures = None
+    """Free memory for the next TLS handshake.
+
+    The departure dict is no longer cached at module scope (we keep a small
+    list of arriving-square anchors instead, see _arriving_positions). This
+    function is now just an explicit GC hook the main loop calls before each
+    HTTP fetch — kept under its old name so the rest of the code is unchanged.
+    """
     gc.collect()
 
 
@@ -392,38 +409,52 @@ def set_wifi_state(connected, stale_data=False):
     _wifi_stale_data = stale_data
 
 
-def _has_arriving_departures(data):
-    """Check if there are any departures with countdown == 0."""
-    if data is None:
-        return False
-    for stop in data:
-        for line in stop.get('lines', []):
-            for dep in line.get('departures', [])[:4]:  # Only check first 4 (displayed)
-                if dep.get('countdown', -1) == 0:
-                    return True
-    return False
-
-
 def update_arriving_animation():
-    """Toggle animation state and redraw display from cached data."""
-    global _arriving_indicator_state, _cached_departures
+    """Toggle the arriving-square positions in-place without re-rendering.
 
-    # Skip animation if no departures are arriving
-    if not _has_arriving_departures(_cached_departures):
-        print('update_arriving_animation: no arriving departures, skipping')
+    Reads _arriving_positions (anchors captured at last write_to_display call)
+    and just clears + redraws the two 8x8 cells per arriving line. The
+    framebuffer keeps everything else unchanged, and show_partial pushes only
+    the diff to the panel. This keeps animation running through failed fetches
+    because _arriving_positions is preserved (small list of int tuples).
+    """
+    global _arriving_indicator_state, _refresh_count
+
+    if not _arriving_positions:
+        print('update_arriving_animation: no arriving positions, skipping')
         return False
 
-    # Toggle the animation state
-    old_state = _arriving_indicator_state
-    _arriving_indicator_state = not _arriving_indicator_state
-    print('update_arriving_animation: toggled {} -> {}'.format(old_state, _arriving_indicator_state))
+    new_state = not _arriving_indicator_state
+    print('update_arriving_animation: toggled {} -> {}'.format(
+        _arriving_indicator_state, new_state))
 
-    # Redraw from cached data if available
-    if _cached_departures is not None:
-        write_to_display(_cached_departures)
-        return True
-    print('update_arriving_animation: no cached data, skipping redraw')
-    return False
+    sq = ARRIVING_SQUARE_SIZE
+    for time_x, times_y in _arriving_positions:
+        top_right_y = times_y
+        top_right_x = time_x + sq
+        bottom_left_x = time_x
+        bottom_left_y = times_y + FONT_16_HEIGHT - sq
+        if new_state:
+            # Going to top-right: erase bottom-left, draw top-right
+            epd.fill_rect(bottom_left_x, bottom_left_y, sq, sq, COLOR_WHITE)
+            epd.fill_rect(top_right_x, top_right_y, sq, sq, COLOR_BLACK)
+        else:
+            # Going to bottom-left: erase top-right, draw bottom-left
+            epd.fill_rect(top_right_x, top_right_y, sq, sq, COLOR_WHITE)
+            epd.fill_rect(bottom_left_x, bottom_left_y, sq, sq, COLOR_BLACK)
+
+    _arriving_indicator_state = new_state
+
+    _refresh_count += 1
+    full_refresh_interval = get_full_refresh_interval()
+    if _refresh_count >= full_refresh_interval:
+        print('update_arriving_animation: full refresh (count={})'.format(_refresh_count))
+        epd.show()
+        _refresh_count = 0
+    else:
+        epd.show_partial()
+
+    return True
 
 
 # Track last displayed minute to avoid unnecessary updates
