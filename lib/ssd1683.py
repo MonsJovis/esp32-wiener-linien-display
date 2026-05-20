@@ -97,11 +97,10 @@ class SSD1683(FrameBuffer):
 
     def _update_partial(self):
         """Trigger partial display refresh (minimal flashing)"""
-        self._cmd(0x21)  # Display update control 1
-        self._dat(0x00)  # Enable OLD RAM for differential comparison
-        self._dat(0x00)
+        # Matches Elecrow Arduino EPD_Update_Part: 0xFF fully cycles analog/OSC/clock
+        # off at end of each update, avoiding charge accumulation across many cycles.
         self._cmd(0x22)
-        self._dat(0xFC)  # Partial refresh with temperature load
+        self._dat(0xFF)
         self._cmd(0x20)
         self._wait()
 
@@ -130,8 +129,8 @@ class SSD1683(FrameBuffer):
         self._dat(0x40)
         self._dat(0x00)
 
-        self._cmd(0x3C)  # Border waveform
-        self._dat(0x01)
+        self._cmd(0x3C)  # Border waveform (matches Elecrow Arduino EPD_Init)
+        self._dat(0x05)
 
         self._cmd(0x11)  # Data entry mode
         self._dat(0x03)  # X increment, Y increment
@@ -166,6 +165,18 @@ class SSD1683(FrameBuffer):
 
     def show_partial(self):
         """Write framebuffer to display and do partial refresh (minimal flashing)"""
+        # Elecrow Arduino EPD_Display_Part preamble: float the border (0x80) so it's
+        # electrically inert during the diff update, and select OLD-RAM comparison.
+        # Without this, the border keeps getting driven across hundreds of partial
+        # refreshes and progressively darkens edge pixels.
+        self._cmd(0x3C)
+        self._dat(0x80)
+        self._cmd(0x21)
+        self._dat(0x00)
+        self._dat(0x00)
+        self._cmd(0x3C)
+        self._dat(0x80)
+
         # Write to NEW RAM (current image)
         self._cur(0, 0)
         self._cmd(0x24)
