@@ -1,4 +1,6 @@
 import requests
+import utime
+import network
 from gc import collect
 from lib.config import get_stops
 
@@ -221,14 +223,31 @@ def make_request():
     import gc as gc_module
     print('make_request: free memory:', gc_module.mem_free(), 'bytes')
 
-    response = None
+    # Capture Wi-Fi diagnostics so we can attribute failures to network state
+    wlan = network.WLAN(network.STA_IF)
+    wifi_connected = wlan.isconnected()
     try:
-        print('make_request: starting HTTP GET (timeout=5s)...')
-        response = requests.get(url, headers={'Accept': 'application/json'}, timeout=5)
-        print('make_request: HTTP GET complete, status:', response.status_code)
+        rssi = wlan.status('rssi') if wifi_connected else None
+    except Exception:
+        rssi = None
+    print('make_request: wifi connected={} rssi={}'.format(wifi_connected, rssi))
+
+    response = None
+    started_ms = utime.ticks_ms()
+    try:
+        print('make_request: starting HTTP GET (timeout=15s)...')
+        response = requests.get(url, headers={'Accept': 'application/json'}, timeout=15)
+        elapsed_ms = utime.ticks_diff(utime.ticks_ms(), started_ms)
+        print('make_request: HTTP GET complete, status:', response.status_code, 'elapsed_ms:', elapsed_ms)
 
         if response.status_code != 200:
-            print('make_request: Error - non-200 response, closing')
+            # Log response body for non-200 to surface API error details
+            try:
+                body = response.text
+                snippet = body[:500] if body else '<empty>'
+            except Exception as body_exc:
+                snippet = '<body read failed: {!r}>'.format(body_exc)
+            print('make_request: non-200 body (first 500 chars):', snippet)
             response.close()
             return None
 
@@ -255,7 +274,16 @@ def make_request():
         return result
 
     except Exception as e:
-        print('make_request: Error -', type(e).__name__, e)
+        elapsed_ms = utime.ticks_diff(utime.ticks_ms(), started_ms)
+        # Re-check Wi-Fi after failure — disconnects mid-request are a common cause
+        still_connected = wlan.isconnected()
+        try:
+            rssi_after = wlan.status('rssi') if still_connected else None
+        except Exception:
+            rssi_after = None
+        print('make_request: Error after {}ms - {} {} (wifi_before={}/rssi={}, wifi_after={}/rssi={})'.format(
+            elapsed_ms, type(e).__name__, e,
+            wifi_connected, rssi, still_connected, rssi_after))
         import sys
         sys.print_exception(e)
         return None
