@@ -33,7 +33,7 @@
     "URBAN LORITZ PLATZ": "U. Loritz Pl."
   },
 
-  "update_interval_sec": 30,
+  "update_interval_sec": 45,
   "animation_interval_sec": 1,
   "full_refresh_interval_cycles": 600,
 
