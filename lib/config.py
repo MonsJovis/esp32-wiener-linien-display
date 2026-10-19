@@ -63,3 +63,8 @@ def get_stale_restart_threshold():
 def get_destination_shortnames():
     """Get destination name abbreviations mapping."""
     return load_config().get('destination_shortnames', {})
+
+
+def get_ota_config():
+    """Get OTA update settings (manifest_url, install_hours). Empty = updates off."""
+    return load_config().get('ota', {})

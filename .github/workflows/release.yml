@@ -1,0 +1,73 @@
+# Publish an app release the device will accept (lib/ota.py).
+#
+# Triggered by a tag, because the tag is the version: tools/release.py stamps
+# it into lib/version.py inside the bundle, and the device compares that
+# string with the next manifest.
+#
+# Two jobs on purpose, as in esp-flight-monitor: only `build` sees the signing
+# key, and `publish` holds nothing but GITHUB_TOKEN. This path ends at a
+# device that runs whatever it installs, so it uses first-party actions only.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests
+        run: python3 -m unittest discover tests
+
+      - name: Build
+        run: |
+          python3 tools/release.py build "$GITHUB_REF_NAME" --out dist \
+            --url-base "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+
+      - name: Sign
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "::error::secrets.OTA_SIGNING_KEY is empty. Devices refuse unsigned releases."
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$OTA_SIGNING_KEY" > "$RUNNER_TEMP/key.pem"
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/key.pem" -out dist/manifest.sig dist/manifest.json
+          rm "$RUNNER_TEMP/key.pem"
+
+      # The device's own checks, against the public key in the repo: a release
+      # signed with the wrong key would be refused by every device.
+      - name: Verify
+        run: python3 tools/release.py verify dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/*

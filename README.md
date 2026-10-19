@@ -21,6 +21,7 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
 - Wi-Fi status indicator on display
 - Watchdog timer for reliability
 - Graceful error handling with stale data fallback
+- Signed over-the-air updates from GitHub Releases, with automatic rollback
 
 ## Hardware
 
@@ -47,10 +48,12 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
 
 ```
 ├── main.py              # Entry point, main loop
-├── boot.py              # MicroPython boot (empty)
-├── config.json          # Configuration (stops, lines, intervals)
+├── boot.py              # Installs staged updates, rolls back failed ones
+├── config.json          # Configuration (stops, lines, intervals, updates)
 ├── secrets.json         # Wi-Fi credentials (not in git)
 ├── deploy.sh            # Deployment script
+├── tools/release.py     # Builds and verifies an OTA release
+├── tests/               # Host tests for the OTA update
 └── lib/
     ├── config.py        # Configuration loader
     ├── crowpanel.py     # Hardware abstraction (buttons, LED)
@@ -62,7 +65,11 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
     ├── init_wifi.py     # Timezone and NTP sync
     ├── secrets.py       # Credential loader
     ├── urlencode.py     # URL encoding
-    └── utils.py         # Helper functions
+    ├── utils.py         # Helper functions
+    ├── ota.py           # OTA check, download, confirm
+    ├── ota_policy.py    # OTA rules: signature, manifest, version, window
+    ├── ota_key.py       # Public half of the release signing key
+    └── version.py       # Running app version (stamped at release/deploy)
 ```
 
 ## Setup
@@ -150,7 +157,7 @@ mpremote connect /dev/ttyUSB0 cp main.py config.json secrets.json :
 | `stops` | Array of stops with DIVA ID and line filters | - |
 | `stops[].diva` | Stop DIVA ID (from Wiener Linien API) | - |
 | `stops[].lines` | Object mapping line names to directions | - |
-| `line_priority` | Display order for lines | `["49", "N49", "U4", "47A", "52"]` |
+| `line_priority` | Display order for lines | `["49", "46", "N49", "U4", "47A", "52"]` |
 | `destination_shortnames` | Mapping of destination names to abbreviations | `{}` |
 | `update_interval_sec` | Data refresh interval in seconds | `30` |
 | `animation_interval_sec` | Arriving indicator toggle in seconds | `4` |
@@ -160,6 +167,8 @@ mpremote connect /dev/ttyUSB0 cp main.py config.json secrets.json :
 | `wlan.max_retries` | Maximum reconnection attempts | `10` |
 | `stale_restart_threshold_sec` | Restart device after stale for this many seconds | `300` |
 | `watchdog_timeout_ms` | Watchdog timeout in milliseconds | `90000` |
+| `ota.manifest_url` | Where the device looks for updates. Missing or empty = updates off | this repo's latest release |
+| `ota.install_hours` | Local hours `[from, to)` in which an update may install | `[3, 5]` |
 
 ### Line Filters
 
@@ -215,6 +224,44 @@ https://www.wienerlinien.at/ogd_realtime/monitor?diva=60201438&diva=60200956
 
 The response is transformed and filtered on-device to minimize memory usage.
 
+## Over-the-air updates
+
+The device updates its app (`main.py`, `config.json`, `lib/*.py`) from this repo's GitHub
+Releases. The MicroPython firmware itself is not updated; that still needs USB.
+
+**Publishing a release is a tag:**
+
+```bash
+git tag -a v1.0.1 -m v1.0.1 && git push origin v1.0.1
+```
+
+`.github/workflows/release.yml` then runs the tests, bundles the files with the version
+stamped into `lib/version.py`, signs `manifest.json` and checks the result with the
+device's own rules (`tools/release.py verify`) before publishing.
+
+**On the device:**
+
+- It checks once a day (5 minutes after boot, then every 24 h, after a failed check every
+  hour) and installs only between 3 and 5 a.m. (`ota.install_hours`).
+- Releases are signed with RSA-2048. `lib/ota_key.py` holds the public key; the private key
+  is the `OTA_SIGNING_KEY` Actions secret. MicroPython does not verify TLS certificates, so
+  the signature is what makes a release trustworthy: an unsigned or modified manifest, or a
+  file that does not match its SHA-256, is never installed.
+- A new build boots on trial and keeps itself after 3 successful departure fetches. If it
+  cannot get there within 3 boots, `boot.py` restores the previous build and skips that
+  version from then on. `boot.py` is never part of an update, so it survives a broken one.
+- `deploy.sh` stamps `git describe` as the version, so a USB deploy at or after a tag is only
+  replaced by a newer release.
+
+**Signing key:** `ota_signing_key.pem` (gitignored). For a fork, make your own and point
+`ota.manifest_url` at your repo:
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out ota_signing_key.pem
+python3 tools/release.py pubkey ota_signing_key.pem   # writes lib/ota_key.py
+gh secret set OTA_SIGNING_KEY < ota_signing_key.pem
+```
+
 ## Development
 
 ### Linting
@@ -227,6 +274,15 @@ ruff check .
 ```
 
 Linting runs automatically on push/PR to main via GitHub Actions.
+
+### Tests
+
+```bash
+python3 -m unittest discover tests
+```
+
+They cover the OTA path on the host: signature, manifest rules, staging, install, rollback
+and the release tool. They need `openssl` and run in CI next to the linter.
 
 ## Troubleshooting
 

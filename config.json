@@ -4,6 +4,7 @@
       "diva": "60201438",
       "lines": {
         "49": [],
+        "46": [],
         "N49": ["R"],
         "47A": []
       }
@@ -22,7 +23,7 @@
     }
   ],
 
-  "line_priority": ["49", "N49", "U4", "47A", "52"],
+  "line_priority": ["49", "46", "N49", "U4", "47A", "52"],
   "destination_shortnames": {
     "HEILIGENSTADT": "Heiligenst.",
     "ANSCHÜTZGASSE": "Anschuetzg.",
@@ -43,5 +44,10 @@
     "max_retries": 10
   },
   "stale_restart_threshold_sec": 300,
-  "watchdog_timeout_ms": 90000
+  "watchdog_timeout_ms": 90000,
+
+  "ota": {
+    "manifest_url": "https://github.com/MonsJovis/esp-public-transport-screen/releases/latest/download/manifest.json",
+    "install_hours": [3, 5]
+  }
 }

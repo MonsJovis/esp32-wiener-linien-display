@@ -176,3 +176,8 @@ secrets*.json
 
 lib/st7735/
 lib/ulogger/
+
+# The OTA release signing key. Never commit it. It lives here, in the GitHub
+# Actions secret OTA_SIGNING_KEY, and in a password-manager backup. Lose all
+# three and a device can only be updated over USB again.
+*_signing_key.pem

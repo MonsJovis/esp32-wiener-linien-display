@@ -8,8 +8,8 @@ ESP32-S3 based real-time public transport departure display for Vienna (Wiener L
 
 ```
 main.py                 # Entry point, initialization, main loop
-boot.py                 # MicroPython boot (empty)
-config.json             # External configuration (stops, lines, intervals)
+boot.py                 # Installs staged OTA updates, rolls back failed ones
+config.json             # External configuration (stops, lines, intervals, ota)
 secrets.json            # Wi-Fi credentials (not in git)
 lib/
   config.py             # Configuration loader (lazy-cached)
@@ -23,6 +23,12 @@ lib/
   secrets.py            # Loads Wi-Fi credentials from secrets.json
   urlencode.py          # URL encoding (supports German umlauts)
   utils.py              # Helper functions (zero-padding)
+  ota.py                # OTA: daily check, download/stage, trial confirm, HTTPS client
+  ota_policy.py         # OTA rules, pure Python (also run by tools/ and tests/)
+  ota_key.py            # Public half of the release signing key
+  version.py            # Running version, stamped by tools/release.py and deploy.sh
+tools/release.py        # Builds, verifies an OTA release; writes lib/ota_key.py
+tests/                  # Host tests (python3 -m unittest discover tests)
 ```
 
 ## Hardware
@@ -118,6 +124,18 @@ ruff check .
 ```
 
 Linting runs automatically on push/PR to main via GitHub Actions.
+
+## OTA updates
+
+- Release = tag `vX.Y.Z` → `.github/workflows/release.yml` publishes `app-X.Y.Z.bin`,
+  `manifest.json`, `manifest.sig` (signing key: Actions secret `OTA_SIGNING_KEY`).
+- `Updater.poll()` runs in the fetch branch right after `clear_cached_departures()` (TLS
+  needs that memory). It checks daily, installs only in `ota.install_hours`, then resets.
+- `boot.py` moves `ota/new/` into place, counts trial boots, rolls back after 3 without
+  `Updater.fetch_ok()` reaching 3. It is not part of the payload; changing it, or the
+  `ota/state.json` format it shares with `lib/ota.py`, needs a USB deploy.
+- Own HTTPS client in `lib/ota.py`: `requests` in MicroPython 1.24 keeps the old Host header
+  across redirects, and GitHub redirects every release download to another host.
 
 ## Key Modules
 

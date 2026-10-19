@@ -17,16 +17,18 @@ from lib.display import (
 )
 from lib.get_data import get_data
 from lib.init_wifi import sync_time
+from lib.ota import Updater
 
 # Global instances
 panel = None
 wlan = None
 wdt = None
+updater = None
 
 
 def initialize():
     """Initialize hardware, display, and Wi-Fi connection."""
-    global panel, wlan, wdt
+    global panel, wlan, wdt, updater
 
     # Initialize watchdog timer
     wdt = WDT(timeout=get_watchdog_timeout())
@@ -65,6 +67,8 @@ def initialize():
     write_start_msg_to_display('Syncing time...')
     sync_time()
     wdt.feed()
+
+    updater = Updater()
 
     write_start_msg_to_display('Fetching data...')
     return True
@@ -138,6 +142,9 @@ def start_main_loop():
             # cost is real but smaller than the ENOMEM loop.
             clear_cached_departures()
 
+            # Daily update check; at night this installs and resets.
+            updater.poll(wlan.is_connected(), wdt)
+
             data = None
             try:
                 data = get_data()
@@ -168,6 +175,7 @@ def start_main_loop():
             last_data_fetch = current_time
             last_successful_fetch = current_time
             last_animation_toggle = current_time
+            updater.fetch_ok()
 
         # Check if stale for too long - trigger restart.
         # Uses last_successful_fetch so repeated failures (which update
