@@ -47,7 +47,7 @@
   "watchdog_timeout_ms": 90000,
 
   "ota": {
-    "manifest_url": "https://github.com/MonsJovis/esp-public-transport-screen/releases/latest/download/manifest.json",
+    "manifest_url": "https://github.com/MonsJovis/esp32-wiener-linien-display/releases/latest/download/manifest.json",
     "install_hours": [3, 5]
   }
 }

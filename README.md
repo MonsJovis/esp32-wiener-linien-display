@@ -4,7 +4,7 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
 
 ![MicroPython](https://img.shields.io/badge/MicroPython-1.24-blue)
 ![ESP32-S3](https://img.shields.io/badge/ESP32--S3-CrowPanel%204.2%22-green)
-[![Lint](https://github.com/monsjovis/esp-public-transport-screen/actions/workflows/lint.yml/badge.svg)](https://github.com/monsjovis/esp-public-transport-screen/actions/workflows/lint.yml)
+[![Lint](https://github.com/monsjovis/esp32-wiener-linien-display/actions/workflows/lint.yml/badge.svg)](https://github.com/monsjovis/esp32-wiener-linien-display/actions/workflows/lint.yml)
 
 ![Display showing departure times](display.jpg)
 
