@@ -20,16 +20,29 @@ echo "VERSION = '${VERSION#v}'" > "$VERSION_FILE"
 
 echo "Deploying ${VERSION#v} to $PORT..."
 
-mpremote connect $PORT fs mkdir lib 2>/dev/null
-
-mpremote connect $PORT fs cp main.py boot.py secrets.json config.json :
-mpremote connect $PORT fs cp lib/*.py :lib/
-mpremote connect $PORT fs cp "$VERSION_FILE" :lib/version.py
+# One mpremote session, and first the watchdog: main.py feeds it until mpremote
+# interrupts it, and 90 s later it resets the board in the middle of a copy.
+# WDT() on the ESP32 reconfigures the running one, so this gives the copy 5 min.
+# Removing ota/state.json: a USB deploy overrides any OTA install in progress.
+# Without this, boot.py could roll the deployed files back to an older OTA backup.
+mpremote connect "$PORT" \
+    exec "from machine import WDT
+WDT(timeout=300000)
+import os
+try:
+    os.mkdir('lib')
+except OSError:
+    pass" \
+    + fs cp main.py boot.py secrets.json config.json : \
+    + fs cp lib/*.py :lib/ \
+    + fs cp "$VERSION_FILE" :lib/version.py \
+    + exec "import os
+try:
+    os.remove('ota/state.json')
+except OSError:
+    pass" \
+    + reset
+STATUS=$?
 rm "$VERSION_FILE"
-
-# A USB deploy overrides any OTA install in progress. Without this, boot.py
-# could roll the deployed files back to an older OTA backup.
-mpremote connect $PORT fs rm :ota/state.json 2>/dev/null
-
-echo "Done. Resetting device..."
-mpremote connect $PORT reset
+[ $STATUS -eq 0 ] && echo "Done. The device restarts." || echo "Deploy FAILED ($STATUS)" >&2
+exit $STATUS
