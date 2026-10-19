@@ -3,7 +3,6 @@ Main entry point for ESP32 Wiener Linien departure display.
 """
 
 import utime
-import machine
 from machine import WDT
 
 from lib.config import get_update_interval, get_animation_interval, get_wlan_config, get_watchdog_timeout, get_stale_restart_threshold
@@ -17,7 +16,7 @@ from lib.display import (
 )
 from lib.get_data import get_data
 from lib.init_wifi import sync_time
-from lib.ota import Updater
+from lib.ota import Updater, mark_offline, offline_reset
 
 # Global instances
 panel = None
@@ -58,6 +57,7 @@ def initialize():
     if not wlan.connect():
         print('Wi-Fi connection failed')
         write_error_to_display('Wi-Fi connection failed')
+        mark_offline()  # the watchdog resets next; not this build's fault
         return False
 
     print('Wi-Fi connected')
@@ -183,7 +183,7 @@ def start_main_loop():
         stale_for = current_time - last_successful_fetch
         if using_stale_data and stale_for > STALE_RESTART_THRESHOLD:
             print('Stale for {}s, restarting...'.format(stale_for))
-            machine.reset()
+            offline_reset()
 
         # Toggle arriving indicator animation at interval
         if has_displayed_data and current_time - last_animation_toggle >= ANIMATION_INTERVAL:

@@ -192,10 +192,30 @@ def confirm():
     print('ota: confirmed', VERSION)
 
 
+def mark_offline():
+    """
+    The next reset is for want of network, not a failure of this build.
+
+    During a trial boot.py then counts the next boot against MAX_OFFLINE_BOOTS,
+    not MAX_TRIAL_BOOTS. Outside a trial there is nothing to mark.
+    """
+    state = _load_state()
+    if state.get('phase') == 'trial':
+        state['offline'] = True
+        _save_state(state)
+
+
+def offline_reset():
+    mark_offline()
+    machine.reset()
+
+
 # --- HTTPS --------------------------------------------------------------
 #
-# Not lib requests: in MicroPython 1.24 it keeps the first Host header across
-# redirects, and GitHub redirects every release download to another host.
+# Not lib requests: it follows a redirect to any scheme, and the bundle has to
+# stream in CHUNK pieces with the watchdog fed between them. (MicroPython 1.24's
+# requests also kept the first Host header across redirects; 1.27's follows
+# GitHub's three hops fine.)
 
 def _open(url, wdt=None):
     """GET over HTTPS, following redirects. Returns (socket, content_length or None)."""
@@ -213,7 +233,7 @@ def _open(url, wdt=None):
             s.settimeout(HTTP_TIMEOUT_SEC)
             s.connect(ai[-1])
             s = _wrap_tls(s, host)
-            s.write(('GET /{} HTTP/1.0\r\nHost: {}\r\nUser-Agent: esp-public-transport-screen\r\n'
+            s.write(('GET /{} HTTP/1.0\r\nHost: {}\r\nUser-Agent: esp32-wiener-linien-display\r\n'
                      'Connection: close\r\n\r\n').format(path, host).encode())
             status = int(s.readline().split(None, 2)[1])
             location = None

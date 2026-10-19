@@ -257,6 +257,34 @@ class DeviceTest(unittest.TestCase):
         self.boot()  # nothing left to do
         self.assertEqual(self.files(), self.OLD_FILES)
 
+    def test_offline_restarts_do_not_roll_back_until_their_own_limit(self):
+        boot_py = runpy.run_path(str(ROOT / 'boot.py'))
+        self.ota.stage(self.manifest)
+        self.boot()
+        for _ in range(boot_py['MAX_OFFLINE_BOOTS']):
+            self.ota.mark_offline()  # main.py: stale restart or failed Wi-Fi
+            self.boot()
+            self.assertEqual(self.files(), self.expected_new())
+        self.assertEqual(self.state()['boots'], 1)
+        self.ota.mark_offline()
+        self.boot()
+        self.assertEqual(self.files(), self.OLD_FILES)
+        self.assertEqual(self.state(), {'bad': '1.2.0'})
+
+    def test_crashes_still_roll_back_between_offline_restarts(self):
+        self.ota.stage(self.manifest)
+        for _ in range(3):
+            self.boot()
+            self.ota.mark_offline()
+            self.boot()
+        self.assertEqual(self.files(), self.expected_new())
+        self.boot()  # fourth boot not after an offline reset
+        self.assertEqual(self.files(), self.OLD_FILES)
+
+    def test_mark_offline_outside_a_trial_writes_nothing(self):
+        self.ota.mark_offline()
+        self.assertIsNone(self.state())
+
     def test_interrupted_install_and_rollback_finish_on_next_boot(self):
         self.ota.stage(self.manifest)
         # Power cut after the first file was backed up, before it was replaced.

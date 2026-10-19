@@ -2,7 +2,7 @@
 
 Real-time public transport departure display for Vienna (Wiener Linien) running on an ESP32-S3 with a 4.2" e-paper screen.
 
-![MicroPython](https://img.shields.io/badge/MicroPython-1.24-blue)
+![MicroPython](https://img.shields.io/badge/MicroPython-1.27-blue)
 ![ESP32-S3](https://img.shields.io/badge/ESP32--S3-CrowPanel%204.2%22-green)
 [![Lint](https://github.com/monsjovis/esp32-wiener-linien-display/actions/workflows/lint.yml/badge.svg)](https://github.com/monsjovis/esp32-wiener-linien-display/actions/workflows/lint.yml)
 
@@ -11,7 +11,7 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
 ## Features
 
 - Real-time departure data from Wiener Linien API
-- Configurable refresh cycle (default: 30 seconds)
+- Configurable refresh cycle (default: 45 seconds, the API's rate limit)
 - E-paper display with partial refresh (minimal flashing)
 - Animated "arriving" indicator for imminent departures
 - Grouped display by line with multiple destinations
@@ -76,7 +76,17 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
 
 ### 1. Flash MicroPython
 
-Flash [MicroPython for ESP32-S3](https://micropython.org/download/ESP32_GENERIC_S3/) (SPIRAM version recommended for better memory management).
+Flash the **SPIRAM_OCT** build of [MicroPython for ESP32-S3](https://micropython.org/download/ESP32_GENERIC_S3/)
+(`ESP32_GENERIC_S3-SPIRAM_OCT-…-v1.27.0.bin`). The CrowPanel's ESP32-S3 has 8 MB of octal PSRAM
+(`esptool flash_id` says "Embedded PSRAM 8MB"); the default build only probes for quad PSRAM,
+logs `PSRAM chip is not connected, or wrong PSRAM line mode` at boot and runs on about 120 KB of
+internal RAM.
+
+```bash
+esptool.py --chip esp32s3 --port /dev/cu.usbserial-110 write_flash -z 0 ESP32_GENERIC_S3-SPIRAM_OCT-20251209-v1.27.0.bin
+```
+
+Without `erase_flash` first the files on the device survive.
 
 ### 2. Configure Wi-Fi
 
@@ -100,6 +110,7 @@ Edit `config.json` to customize which stops and lines to monitor:
       "diva": "60201438",
       "lines": {
         "49": [],
+        "46": [],
         "N49": ["R"],
         "47A": []
       }
@@ -109,23 +120,33 @@ Edit `config.json` to customize which stops and lines to monitor:
       "lines": {
         "U4": ["H"]
       }
+    },
+    {
+      "diva": "60200113",
+      "lines": {
+        "52": ["R"]
+      }
     }
   ],
-  "line_priority": ["49", "N49", "U4", "47A", "52"],
+  "line_priority": ["49", "46", "N49", "U4", "47A", "52"],
   "destination_shortnames": {
     "HEILIGENSTADT": "Heiligenst.",
     "WESTBAHNHOF S U": "Westbahnhof"
   },
-  "update_interval_sec": 30,
-  "animation_interval_sec": 4,
-  "full_refresh_interval_cycles": 40,
+  "update_interval_sec": 45,
+  "animation_interval_sec": 1,
+  "full_refresh_interval_cycles": 600,
   "wlan": {
     "timeout_sec": 60,
     "reconnect_delay_sec": 5,
     "max_retries": 10
   },
   "stale_restart_threshold_sec": 300,
-  "watchdog_timeout_ms": 90000
+  "watchdog_timeout_ms": 90000,
+  "ota": {
+    "manifest_url": "https://github.com/MonsJovis/esp32-wiener-linien-display/releases/latest/download/manifest.json",
+    "install_hours": [3, 5]
+  }
 }
 ```
 
@@ -137,8 +158,9 @@ Using [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html)
 # Install mpremote
 pip install mpremote
 
-# Deploy all files
+# Deploy all files (finds the one USB serial port; pass it when there are several)
 ./deploy.sh
+./deploy.sh /dev/cu.usbserial-110
 ```
 
 Or manually:
@@ -159,9 +181,9 @@ mpremote connect /dev/ttyUSB0 cp main.py config.json secrets.json :
 | `stops[].lines` | Object mapping line names to directions | - |
 | `line_priority` | Display order for lines | `["49", "46", "N49", "U4", "47A", "52"]` |
 | `destination_shortnames` | Mapping of destination names to abbreviations | `{}` |
-| `update_interval_sec` | Data refresh interval in seconds | `30` |
-| `animation_interval_sec` | Arriving indicator toggle in seconds | `4` |
-| `full_refresh_interval_cycles` | Partial refreshes before full refresh | `40` |
+| `update_interval_sec` | Data refresh interval in seconds (lower hits the API rate limit) | `45` |
+| `animation_interval_sec` | Arriving indicator toggle in seconds | `1` |
+| `full_refresh_interval_cycles` | Partial refreshes before full refresh | `600` |
 | `wlan.timeout_sec` | Wi-Fi connection timeout in seconds | `60` |
 | `wlan.reconnect_delay_sec` | Delay before reconnection attempt in seconds | `5` |
 | `wlan.max_retries` | Maximum reconnection attempts | `10` |
@@ -192,14 +214,14 @@ Use the [Wiener Linien OGD API](https://www.data.gv.at/katalog/dataset/wiener-li
    - Sort by priority (preferred lines first)
    - Render to e-paper with partial refresh
    - Draw Wi-Fi status indicator
-3. **Animation**: Toggle arriving indicator every 4 seconds
+3. **Animation**: Toggle arriving indicator every `animation_interval_sec`
 4. **Stale data**: Auto-restart after 5 minutes without fresh data
 5. **Watchdog**: 90-second timeout prevents hangs
 
 ### E-Paper Refresh Strategy
 
 - **Partial refresh**: Used for regular updates (~0.5s, minimal flashing)
-- **Full refresh**: Every 40 updates to clear ghosting (~3s, full flash)
+- **Full refresh**: Every `full_refresh_interval_cycles` updates to clear ghosting (~3s, full flash)
 
 ### Button Functions
 
@@ -249,7 +271,9 @@ device's own rules (`tools/release.py verify`) before publishing.
   file that does not match its SHA-256, is never installed.
 - A new build boots on trial and keeps itself after 3 successful departure fetches. If it
   cannot get there within 3 boots, `boot.py` restores the previous build and skips that
-  version from then on. `boot.py` is never part of an update, so it survives a broken one.
+  version from then on. Restarts for want of network (stale data, failed Wi-Fi) count
+  separately, up to 24 (1-2 hours), so an outage right after a night install does not throw
+  away a good build. `boot.py` is never part of an update, so it survives a broken one.
 - `deploy.sh` stamps `git describe` as the version, so a USB deploy at or after a tag is only
   replaced by a newer release.
 
@@ -296,7 +320,7 @@ and the release tool. They need `openssl` and run in CI next to the linter.
 ### Memory Errors
 
 - The device runs garbage collection before HTTP requests
-- SPIRAM firmware recommended for better memory management
+- Use the SPIRAM_OCT firmware (see Setup): with the default build the PSRAM stays off
 - Reduce `full_refresh_interval_cycles` if issues persist
 
 ### Display Ghosting

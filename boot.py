@@ -10,7 +10,11 @@ ota/state.json with phase "staged" and resets. Then on each boot:
 - trial:    count the boot and arm the watchdog, so a build that crashes
             before main.py starts its own still resets. main.py confirms a
             build that works (lib/ota.py confirm() deletes the journal).
-            After MAX_TRIAL_BOOTS unconfirmed boots it is rolled back.
+            After MAX_TRIAL_BOOTS unconfirmed boots it is rolled back. A boot
+            after main.py reset for want of network (lib/ota.py
+            mark_offline()) counts against MAX_OFFLINE_BOOTS instead, so a
+            Wi-Fi or API outage right after a night install does not roll
+            back a good build.
 - rollback: put ota/old/ back, delete files the update added, remember the
             version as bad so it is not installed again.
 
@@ -26,6 +30,10 @@ STATE = 'ota/state.json'
 NEW = 'ota/new/'
 OLD = 'ota/old/'
 MAX_TRIAL_BOOTS = 3
+# One offline boot is a stale restart (stale_restart_threshold_sec, 5 min) or a
+# failed Wi-Fi connect (about 2.5 min), so 24 of them are 1-2 hours offline: a
+# build that cannot fetch at all is still rolled back before the morning.
+MAX_OFFLINE_BOOTS = 24
 # Long enough for main.py's imports; initialize() then reconfigures the
 # watchdog to watchdog_timeout_ms (WDT() on ESP32 reconfigures the running one).
 TRIAL_WDT_MS = 120000
@@ -89,8 +97,9 @@ def run():
         state['boots'] = 0
 
     if phase == 'trial':
-        state['boots'] = state.get('boots', 0) + 1
-        if state['boots'] > MAX_TRIAL_BOOTS:
+        key = 'offline_boots' if state.pop('offline', False) else 'boots'
+        state[key] = state.get(key, 0) + 1
+        if state.get('boots', 0) > MAX_TRIAL_BOOTS or state.get('offline_boots', 0) > MAX_OFFLINE_BOOTS:
             phase = state['phase'] = 'rollback'
         _save(state)
 
@@ -99,7 +108,9 @@ def run():
         _rollback(state['files'])
         _save({'bad': state['version']})
     elif phase == 'trial':
-        print('ota: trial boot {}/{} of {}'.format(state['boots'], MAX_TRIAL_BOOTS, state['version']))
+        print('ota: trial boot {}/{} (offline {}/{}) of {}'.format(
+            state.get('boots', 0), MAX_TRIAL_BOOTS,
+            state.get('offline_boots', 0), MAX_OFFLINE_BOOTS, state['version']))
         from machine import WDT
         WDT(timeout=TRIAL_WDT_MS)
 

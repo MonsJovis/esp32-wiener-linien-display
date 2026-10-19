@@ -1,5 +1,16 @@
 #!/bin/bash
-PORT=${1:-/dev/cu.usbserial-1140}
+# The port name moves with the USB socket (cu.usbserial-10, -110, -1140), so
+# without an argument take the one USB serial port there is.
+PORT=$1
+if [ -z "$PORT" ]; then
+    PORTS=(/dev/cu.usbserial-* /dev/cu.usbmodem*)
+    PORTS=($(ls "${PORTS[@]}" 2>/dev/null))
+    if [ ${#PORTS[@]} -ne 1 ]; then
+        echo "Found ${#PORTS[@]} USB serial ports (${PORTS[*]}). Pass one: ./deploy.sh /dev/cu.usbserial-..." >&2
+        exit 1
+    fi
+    PORT=${PORTS[0]}
+fi
 
 # The device compares this with each release: a deploy made at or after the
 # v1.2.0 tag ("1.2.0-3-gabc") is replaced by v1.2.1, not by v1.2.0 again.

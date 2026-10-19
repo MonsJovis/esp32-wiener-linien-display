@@ -105,16 +105,18 @@ All settings are in `config.json`:
 **Deployment**: Use `mpremote` to upload files to ESP32-S3:
 
 ```bash
-./deploy.sh                      # Deploys all files including config.json
-./deploy.sh /dev/cu.usbserial-10 # Port changes with the USB socket: ls /dev/cu.usbserial-*
+./deploy.sh                       # Deploys all files; finds the one USB serial port itself
+./deploy.sh /dev/cu.usbserial-110 # Port name changes with the USB socket (-10, -110, -1140)
 ```
 
 A deploy stamps `git describe` into `lib/version.py` (`0.0.0-<hash>` before the first tag) and
 deletes `ota/state.json`, so a USB deploy always wins over an OTA install in progress.
 
-**Firmware**: Flash MicroPython for ESP32-S3 (with SPIRAM support recommended). The firmware on
-the current board logs `PSRAM chip is not connected, or wrong PSRAM line mode` at boot and runs
-on internal RAM only: about 100-120k free before a request.
+**Firmware**: MicroPython 1.27.0, build `ESP32_GENERIC_S3-SPIRAM_OCT` (`esptool write_flash -z 0`,
+no `erase_flash`, keeps the files). The board's ESP32-S3 has 8 MB of embedded octal PSRAM; the
+default S3 build only probes quad PSRAM, logs `PSRAM chip is not connected, or wrong PSRAM line
+mode` at boot and runs on internal RAM only (about 100-120k free before a request). The ENOMEM
+rules under Conventions come from that setup.
 
 **Credentials**: Create `secrets.json` in project root (not in git):
 
@@ -149,10 +151,13 @@ GitHub Actions.
 - `Updater.poll()` runs in the fetch branch right after `clear_cached_departures()` (TLS
   needs that memory). It checks daily, installs only in `ota.install_hours`, then resets.
 - `boot.py` moves `ota/new/` into place, counts trial boots, rolls back after 3 without
-  `Updater.fetch_ok()` reaching 3. It is not part of the payload; changing it, or the
-  `ota/state.json` format it shares with `lib/ota.py`, needs a USB deploy.
-- Own HTTPS client in `lib/ota.py`: `requests` in MicroPython 1.24 keeps the old Host header
-  across redirects, and GitHub redirects every release download to another host.
+  `Updater.fetch_ok()` reaching 3. Resets for want of network go through
+  `lib/ota.mark_offline()` / `offline_reset()` (stale restart, failed Wi-Fi at boot) and count
+  separately, up to 24. It is not part of the payload; changing it, or the `ota/state.json`
+  format it shares with `lib/ota.py`, needs a USB deploy.
+- Own HTTPS client in `lib/ota.py`: refuses redirects to anything but https and streams the
+  bundle with the watchdog fed per 1 KB. (MicroPython 1.24's `requests` kept the old Host
+  header across GitHub's redirects; 1.27's follows them fine.)
 
 ## Key Modules
 
