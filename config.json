@@ -26,11 +26,25 @@
   "line_priority": ["49", "46", "N49", "U4", "47A", "52"],
   "destination_shortnames": {
     "HEILIGENSTADT": "Heiligenst.",
-    "ANSCHÜTZGASSE": "Anschuetzg.",
+    "ANSCHUETZGASSE": "Anschuetzg.",
     "UNTER ST. VEIT U": "Unter St. V.",
+    "UNTER ST. VEIT": "Unter St. V.",
     "WESTBAHNHOF S U": "Westbahnhof",
-    "HÜTTELDORF": "Huetteldorf",
     "KLINIK PENZING": "Kl. Penzing",
-    "URBAN LORITZ PLATZ": "U. Loritz Pl."
+    "URBAN LORITZ PLATZ": "U. Loritz Pl.",
+    "URBAN-LORITZ-PLATZ": "U. Loritz Pl.",
+    "JOACHIMSTHALERPLATZ": "Joachimsth.",
+    "HOFWIESENGASSE": "Hofwieseng.",
+    "MAROLTINGERGASSE": "Maroltingerg.",
+    "WINCKELMANNSTRASSE": "Winckelm.str.",
+    "LINZER STRASSE": "Linzer Str.",
+    "JOSEFSTAEDTER STRASSE U": "Josefst. Str.",
+    "BAHNHOF HUETTELDORF SU": "Huetteldorf",
+    "BHF. HUETTELDORF S U": "Huetteldorf",
+    "HUETTELDORFER STRASSE U": "Huetteld.Str.",
+    "BERGMILLERGASSE": "Bergmillerg.",
+    "BAHNHOF OTTAKRING": "Bf. Ottakring",
+    "BAHNHOF RUDOLFSHEIM": "Bf. Rudolfsh.",
+    "BAHNHOF SPEISING": "Bf. Speising"
   }
 }

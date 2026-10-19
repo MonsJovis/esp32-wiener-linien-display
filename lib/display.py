@@ -23,6 +23,8 @@ LINE_NAME_WIDTH = 52  # Fixed width for line name column (e.g., "49", "U4", "47A
 DESTINATION_X = 70  # X position for destination text
 TIMES_COLUMN_X = 190  # Fixed X position where departure times start
 TIME_SLOT_WIDTH = 52  # Width per time slot - wider for better readability
+# 8 px per character, two characters of air before the times
+MAX_DESTINATION_CHARS = (TIMES_COLUMN_X - DESTINATION_X) // 8 - 2
 
 # Row heights for grouped layout
 GROUP_FIRST_ROW_HEIGHT = 34  # First row of group (with line name)
@@ -156,15 +158,17 @@ def _shorten_destination(towards):
     # Take first part before comma
     towards = towards.split(',')[0].strip()
 
-    # Shorten known long names from config
-    shortnames = get_destination_shortnames()
-    upper = towards.upper()
-    if upper in shortnames:
-        towards = shortnames[upper]
-
-    # Replace German umlauts
+    # Replace German umlauts first: MicroPython's upper() leaves ä/ö/ü as they
+    # are, so the config keys are ASCII ("HUETTELDORFER STRASSE U").
     towards = towards.replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue')
     towards = towards.replace('Ä', 'Ae').replace('Ö', 'Oe').replace('Ü', 'Ue').replace('ß', 'ss')
+
+    # Shorten known long names from config
+    towards = get_destination_shortnames().get(towards.upper(), towards)
+
+    # Anything still too long would run into the departure times
+    if len(towards) > MAX_DESTINATION_CHARS:
+        towards = towards[:MAX_DESTINATION_CHARS - 1] + '.'
 
     return towards
 
