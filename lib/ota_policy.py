@@ -72,12 +72,13 @@ def version_cmp(a, b):
 
 def path_allowed(path):
     """
-    What an update may write: main.py, config.json and lib/*.py.
+    What an update may write: main.py and lib/*.py.
 
     Never boot.py (the rollback lives there and must survive any update),
-    never secrets.json, never anything under ota/.
+    never config.json or secrets.json (the device's own, see lib/config.py),
+    never anything under ota/.
     """
-    if path in ('main.py', 'config.json'):
+    if path == 'main.py':
         return True
     return (isinstance(path, str) and path.startswith('lib/') and path.endswith('.py')
             and len(path) > 7 and '/' not in path[4:])

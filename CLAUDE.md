@@ -9,10 +9,10 @@ ESP32-S3 based real-time public transport departure display for Vienna (Wiener L
 ```
 main.py                 # Entry point, initialization, main loop
 boot.py                 # Installs staged OTA updates, rolls back failed ones
-config.json             # External configuration (stops, lines, intervals, ota)
+config.json             # The device's own settings (stops, lines, names); never in an update
 secrets.json            # Wi-Fi credentials (not in git)
 lib/
-  config.py             # Configuration loader (lazy-cached)
+  config.py             # Configuration loader: config.json over DEFAULTS (lazy-cached)
   crowpanel.py          # Hardware abstraction (buttons, LED, display)
   wifi_manager.py       # Wi-Fi connection class with reconnect support
   display.py            # E-paper rendering (line names, departure times)
@@ -60,7 +60,8 @@ tests/                  # Host tests (python3 -m unittest discover tests)
 
 ## Configuration
 
-All settings are in `config.json`:
+Two layers. `config.json` belongs to the device: only `deploy.sh` (USB) writes it, an OTA
+update never does (`lib/ota_policy.path_allowed`). It holds what is the device's own:
 
 ```json
 {
@@ -70,22 +71,23 @@ All settings are in `config.json`:
     {"diva": "60200113", "lines": {"52": ["R"]}}
   ],
   "line_priority": ["49", "46", "N49", "U4", "47A", "52"],
-  "destination_shortnames": {"HEILIGENSTADT": "Heiligenst.", "...": "..."},
-  "update_interval_sec": 45,
-  "animation_interval_sec": 1,
-  "full_refresh_interval_cycles": 600,
-  "wlan": {"timeout_sec": 60, "reconnect_delay_sec": 5, "max_retries": 10},
-  "stale_restart_threshold_sec": 300,
-  "watchdog_timeout_ms": 90000,
-  "ota": {"manifest_url": "https://github.com/MonsJovis/esp32-wiener-linien-display/releases/latest/download/manifest.json",
-          "install_hours": [3, 5]}
+  "destination_shortnames": {"HEILIGENSTADT": "Heiligenst.", "...": "..."}
 }
 ```
 
+Everything else has a default in `lib/config.py` `DEFAULTS`, which ships with the app:
+`update_interval_sec` 45 (lower runs into the API rate limit), `animation_interval_sec` 1,
+`full_refresh_interval_cycles` 600, `wlan` {60, 5, 10}, `stale_restart_threshold_sec` 300,
+`watchdog_timeout_ms` 90000, `ota` {`manifest_url` this repo's latest release, `install_hours`
+[3, 5]}. A key in `config.json` overrides its default (`wlan`/`ota` key by key); `"manifest_url": ""`
+turns updates off.
+
+- A new setting goes into `DEFAULTS`, never only into `config.json`: devices keep their old one.
+- Keep defaults out of the repo's `config.json`: a key there pins the value on the device, and
+  later releases can no longer change it.
 - `stops[].lines`: Empty array = all directions, `["R"]` = outbound, `["H"]` = inbound
-- `update_interval_sec` 45: lower runs into the API rate limit
-- `config.json` ships with every OTA release, so config changes reach the device by tag too
-- Wi-Fi credentials remain in `secrets.json` (gitignored)
+- Wi-Fi credentials are in `secrets.json` (gitignored), also device-only: USB deploy writes it,
+  an update never does.
 
 ## E-Paper Display
 
@@ -127,7 +129,8 @@ rules under Conventions come from that setup.
 }
 ```
 
-**Modifying monitored lines**: Edit `config.json` - no code changes needed.
+**Modifying monitored lines**: Edit `config.json` and `./deploy.sh` (USB) - no code changes
+needed, but no release reaches the device's config either.
 
 **Linting**: This project uses [ruff](https://docs.astral.sh/ruff/) for code quality:
 
@@ -146,8 +149,9 @@ GitHub Actions.
   (signing key: Actions secret `OTA_SIGNING_KEY`; backup in 1Password, private account, vault
   Schaurich). The device checks 5 min after boot, then daily.
 - Testing an install by day: USB-deploy before tagging, then copy a `config.json` with
-  `"install_hours": [0, 24]` to the device and reset. The release's own `config.json` puts the
-  window back to 3-5. Watch the serial log for `ota: confirmed X.Y.Z` (v1.0.0 passed this way).
+  `"ota": {"install_hours": [0, 24]}` added to the device and reset. Watch the serial log for
+  `ota: confirmed X.Y.Z` (v1.0.0 passed this way), then `./deploy.sh` again: an update no
+  longer touches `config.json`, so the override stays until a USB deploy removes it.
 - `Updater.poll()` runs in the fetch branch right after `clear_cached_departures()` (TLS
   needs that memory). It checks daily, installs only in `ota.install_hours`, then resets.
 - `boot.py` moves `ota/new/` into place, counts trial boots, rolls back after 3 without
@@ -161,7 +165,7 @@ GitHub Actions.
 
 ## Key Modules
 
-- **config.py**: Lazy-loads and caches config.json, provides getter functions
+- **config.py**: Lazy-loads config.json over `DEFAULTS`, caches it, provides getter functions
 - **crowpanel.py**: Hardware abstraction for CrowPanel board (buttons, LED, display init)
 - **wifi_manager.py**: WLANManager class with `connect()`, `reconnect()`, `is_connected()`
 - **display.py**: All rendering functions, Wi-Fi status indicator, animation state
@@ -173,4 +177,5 @@ GitHub Actions.
 - Error handling: catch exceptions, display error message, continue polling with stale data
 - E-paper optimization: minimize full refreshes, use partial refresh for animations
 - Sleep with `utime.sleep()`, not `machine.lightsleep()` (lightsleep trips the watchdog)
-- Configuration: all user-configurable values in config.json, not hardcoded
+- Configuration: every user-configurable value has a default in `lib/config.py` `DEFAULTS` and
+  can be overridden in config.json; nothing configurable is hardcoded elsewhere

@@ -8,6 +8,7 @@ stubs for machine/utime/ujson/ntptime in a temporary "device" directory.
 """
 
 import hashlib
+import importlib
 import io
 import json
 import os
@@ -125,7 +126,7 @@ class PolicyTest(unittest.TestCase):
         self.assertFalse(verify(b'{"version": "1.2.0"}', sig[:-1], KEY.N, KEY.E, KEY.K))
 
     def test_parse_manifest(self):
-        good = manifest_for([('main.py', b'x'), ('lib/a.py', b'y'), ('config.json', b'{}')])
+        good = manifest_for([('main.py', b'x'), ('lib/a.py', b'y')])
         self.assertEqual(ota_policy.parse_manifest(json.dumps(good))['version'], '1.2.0')
 
         def bad(**change):
@@ -137,8 +138,8 @@ class PolicyTest(unittest.TestCase):
         bad(version='latest')
         bad(bundle='http://example.org/app.bin')
         bad(files=[])
-        for path in ['boot.py', 'secrets.json', 'ota/state.json', 'lib/sub/a.py', '/main.py',
-                     'lib/a.mpy']:
+        for path in ['boot.py', 'config.json', 'secrets.json', 'ota/state.json', 'lib/sub/a.py',
+                     '/main.py', 'lib/a.mpy']:
             bad(files=[{'path': path, 'size': 1, 'sha256': '0' * 64}])
         bad(files=[{'path': 'main.py', 'size': -1, 'sha256': '0' * 64}])
         bad(files=[{'path': 'main.py', 'size': 1, 'sha256': 'abc'}])
@@ -149,6 +150,33 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual([h for h in range(24) if inside(h, 3, 5)], [3, 4])
         self.assertEqual([h for h in range(24) if inside(h, 23, 2)], [0, 1, 23])
         self.assertEqual([h for h in range(24) if inside(h, 4, 4)], [])
+
+
+class ConfigTest(unittest.TestCase):
+    """The device's config.json over the defaults that ship with the app."""
+
+    def load(self, own):
+        with tempfile.TemporaryDirectory() as d:
+            cwd = os.getcwd()
+            os.chdir(d)
+            try:
+                pathlib.Path('config.json').write_text(json.dumps(own))
+                sys.modules.pop('lib.config', None)
+                # Not `from lib import config`: that returns the package's cached attribute.
+                return importlib.import_module('lib.config').load_config()
+            finally:
+                os.chdir(cwd)
+                sys.modules.pop('lib.config', None)
+
+    def test_defaults_fill_what_the_device_leaves_out(self):
+        cfg = self.load({'stops': [], 'wlan': {'timeout_sec': 20}, 'ota': {'install_hours': [1, 2]}})
+        self.assertEqual(cfg['update_interval_sec'], 45)
+        self.assertEqual(cfg['wlan'], {'timeout_sec': 20, 'reconnect_delay_sec': 5, 'max_retries': 10})
+        self.assertEqual(cfg['ota']['install_hours'], [1, 2])
+        self.assertTrue(cfg['ota']['manifest_url'].startswith('https://github.com/'))
+
+    def test_empty_manifest_url_turns_updates_off(self):
+        self.assertEqual(self.load({'ota': {'manifest_url': ''}})['ota']['manifest_url'], '')
 
 
 class ReleaseTest(unittest.TestCase):
@@ -162,10 +190,11 @@ class ReleaseTest(unittest.TestCase):
 
             manifest = json.loads((out / 'manifest.json').read_text())
             paths = [f['path'] for f in manifest['files']]
-            self.assertEqual(paths[:2], ['main.py', 'config.json'])
+            self.assertEqual(paths[0], 'main.py')
             self.assertIn('lib/ota.py', paths)
             self.assertIn('lib/version.py', paths)
-            self.assertNotIn('boot.py', paths)
+            for own in ['boot.py', 'config.json', 'secrets.json']:
+                self.assertNotIn(own, paths)
             self.assertEqual(manifest['bundle'],
                              'https://example.org/releases/download/v1.2.3/app-1.2.3.bin')
 
@@ -185,7 +214,8 @@ class DeviceTest(unittest.TestCase):
     OLD_FILES = {'main.py': b'old main', 'config.json': b'{}', 'lib/ota.py': b'old ota',
                  'lib/gone.py': b'only in the old build', 'secrets.json': b'secret',
                  'boot.py': b'not touched'}
-    NEW_FILES = [('main.py', b'new main ' * 300), ('config.json', b'{"ota": {}}'),
+    # config.json and secrets.json stay as they are: OLD_FILES survive in expected_new().
+    NEW_FILES = [('main.py', b'new main ' * 300), ('lib/config.py', b'new config'),
                  ('lib/ota.py', b'new ota'), ('lib/added.py', b'only in the new build')]
 
     def setUp(self):

@@ -49,7 +49,7 @@ Real-time public transport departure display for Vienna (Wiener Linien) running 
 ```
 ├── main.py              # Entry point, main loop
 ├── boot.py              # Installs staged updates, rolls back failed ones
-├── config.json          # Configuration (stops, lines, intervals, updates)
+├── config.json          # The device's settings (stops, lines, names); USB deploy only
 ├── secrets.json         # Wi-Fi credentials (not in git)
 ├── deploy.sh            # Deployment script
 ├── tools/release.py     # Builds and verifies an OTA release
@@ -132,23 +132,14 @@ Edit `config.json` to customize which stops and lines to monitor:
   "destination_shortnames": {
     "HEILIGENSTADT": "Heiligenst.",
     "WESTBAHNHOF S U": "Westbahnhof"
-  },
-  "update_interval_sec": 45,
-  "animation_interval_sec": 1,
-  "full_refresh_interval_cycles": 600,
-  "wlan": {
-    "timeout_sec": 60,
-    "reconnect_delay_sec": 5,
-    "max_retries": 10
-  },
-  "stale_restart_threshold_sec": 300,
-  "watchdog_timeout_ms": 90000,
-  "ota": {
-    "manifest_url": "https://github.com/MonsJovis/esp32-wiener-linien-display/releases/latest/download/manifest.json",
-    "install_hours": [3, 5]
   }
 }
 ```
+
+Every other setting has a default that ships with the app (`lib/config.py`, table below). Add a
+key to `config.json` only to override it on this device, e.g. `"wlan": {"timeout_sec": 30}`.
+`config.json` and `secrets.json` belong to the device: `./deploy.sh` writes them, an update
+never does.
 
 ### 4. Deploy to Device
 
@@ -176,10 +167,10 @@ mpremote connect /dev/ttyUSB0 cp main.py config.json secrets.json :
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `stops` | Array of stops with DIVA ID and line filters | - |
+| `stops` | Array of stops with DIVA ID and line filters | required |
 | `stops[].diva` | Stop DIVA ID (from Wiener Linien API) | - |
 | `stops[].lines` | Object mapping line names to directions | - |
-| `line_priority` | Display order for lines | `["49", "46", "N49", "U4", "47A", "52"]` |
+| `line_priority` | Display order for lines | required |
 | `destination_shortnames` | Mapping of destination names to abbreviations | `{}` |
 | `update_interval_sec` | Data refresh interval in seconds (lower hits the API rate limit) | `45` |
 | `animation_interval_sec` | Arriving indicator toggle in seconds | `1` |
@@ -189,7 +180,7 @@ mpremote connect /dev/ttyUSB0 cp main.py config.json secrets.json :
 | `wlan.max_retries` | Maximum reconnection attempts | `10` |
 | `stale_restart_threshold_sec` | Restart device after stale for this many seconds | `300` |
 | `watchdog_timeout_ms` | Watchdog timeout in milliseconds | `90000` |
-| `ota.manifest_url` | Where the device looks for updates. Missing or empty = updates off | this repo's latest release |
+| `ota.manifest_url` | Where the device looks for updates. `""` = updates off | this repo's latest release |
 | `ota.install_hours` | Local hours `[from, to)` in which an update may install | `[3, 5]` |
 
 ### Line Filters
@@ -248,8 +239,10 @@ The response is transformed and filtered on-device to minimize memory usage.
 
 ## Over-the-air updates
 
-The device updates its app (`main.py`, `config.json`, `lib/*.py`) from this repo's GitHub
-Releases. The MicroPython firmware itself is not updated; that still needs USB.
+The device updates its app (`main.py`, `lib/*.py`) from this repo's GitHub Releases. Its own
+`config.json` and `secrets.json` are never part of an update, so a release never changes which
+stops a device shows or which Wi-Fi it joins; new settings arrive as defaults in
+`lib/config.py`. The MicroPython firmware itself is not updated either; that still needs USB.
 
 **Publishing a release is a tag:**
 

@@ -28,8 +28,9 @@ sys.path.insert(0, str(ROOT))
 
 from lib import ota_policy  # noqa: E402
 
-# boot.py and secrets.json are never part of an update (see lib/ota_policy.path_allowed).
-TOP_LEVEL = ['main.py', 'config.json']
+# boot.py, config.json and secrets.json are never part of an update (see
+# lib/ota_policy.path_allowed); new settings get defaults in lib/config.py.
+TOP_LEVEL = ['main.py']
 
 
 def payload(version):
