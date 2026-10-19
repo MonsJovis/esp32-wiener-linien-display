@@ -46,7 +46,7 @@ def load_config():
             with open('config.json', 'r') as f:
                 _config = _merge(DEFAULTS, ujson.load(f))
         except OSError as err:
-            raise RuntimeError('config.json not found. Please create it from config.json.example') from err
+            raise RuntimeError('config.json not found. Deploy it with ./deploy.sh') from err
     return _config
 
 

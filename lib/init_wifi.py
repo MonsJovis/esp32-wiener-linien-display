@@ -17,9 +17,9 @@ TIMEZONE_OFFSET_HOURS = 1  # Base offset (CET)
 def is_dst():
     """Check if daylight saving time is active (last Sunday of March to last Sunday of October).
 
-    DST transitions at 2:00 AM local time:
-    - March: clocks move forward (2:00 -> 3:00)
-    - October: clocks move back (3:00 -> 2:00)
+    The RTC runs on UTC (ntptime), and the EU switches at 1:00 UTC both times:
+    - March: clocks move forward (2:00 CET -> 3:00 CEST)
+    - October: clocks move back (3:00 CEST -> 2:00 CET)
     """
     now = utime.localtime()
     year, month, day, hour = now[0], now[1], now[2], now[3]
@@ -36,18 +36,18 @@ def is_dst():
     last_sunday = last_day - ((last_day_weekday + 1) % 7)
 
     if month == 3:
-        # DST starts: on last Sunday, DST active from 2:00 onwards
+        # DST starts: on last Sunday, DST active from 1:00 UTC onwards
         if day > last_sunday:
             return True
         if day == last_sunday:
-            return hour >= 2
+            return hour >= 1
         return False
     else:  # October
-        # DST ends: on last Sunday, DST inactive from 3:00 onwards
+        # DST ends: on last Sunday, DST inactive from 1:00 UTC onwards
         if day < last_sunday:
             return True
         if day == last_sunday:
-            return hour < 3
+            return hour < 1
         return False
 
 

@@ -92,9 +92,16 @@ def run():
 
     if phase == 'staged':
         print('ota: installing', state['version'])
-        _apply(state['files'])
-        phase = state['phase'] = 'trial'
-        state['boots'] = 0
+        try:
+            _apply(state['files'])
+        except Exception as e:
+            # Raised again on every boot otherwise, with the build half in place
+            # and no trial that could ever roll it back.
+            print('ota: install failed:', e)
+            phase = state['phase'] = 'rollback'
+        else:
+            phase = state['phase'] = 'trial'
+            state['boots'] = 0
 
     if phase == 'trial':
         key = 'offline_boots' if state.pop('offline', False) else 'boots'

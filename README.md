@@ -94,8 +94,10 @@ Create `secrets.json` in the project root:
 
 ```json
 {
-  "wifi_ssid": "YOUR_SSID",
-  "wifi_password": "YOUR_PASSWORD"
+  "wifi": {
+    "ssid": "YOUR_SSID",
+    "password": "YOUR_PASSWORD"
+  }
 }
 ```
 
@@ -158,7 +160,7 @@ Or manually:
 
 ```bash
 mpremote connect /dev/ttyUSB0 cp -r lib/ :lib/
-mpremote connect /dev/ttyUSB0 cp main.py config.json secrets.json :
+mpremote connect /dev/ttyUSB0 cp main.py boot.py config.json secrets.json :
 ```
 
 ## Configuration

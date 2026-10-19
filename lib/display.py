@@ -30,6 +30,11 @@ MAX_DESTINATION_CHARS = (TIMES_COLUMN_X - DESTINATION_X) // 8 - 2
 GROUP_FIRST_ROW_HEIGHT = 34  # First row of group (with line name)
 GROUP_SUB_ROW_HEIGHT = 28  # Subsequent rows (destination only)
 GROUP_SEPARATOR_PADDING = 6  # Padding above and below separator line
+# Tighter rows for when those would run into the bottom row: 49 and 46 both
+# ways, U4, 47A both ways and 52 need 306 px, and there are 284.
+COMPACT_FIRST_ROW_HEIGHT = 28
+COMPACT_SUB_ROW_HEIGHT = 22
+COMPACT_SEPARATOR_PADDING = 3
 TOP_OFFSET = 4
 LAST_ROW_TOP_OFFSET = 288
 
@@ -173,6 +178,11 @@ def _shorten_destination(towards):
     return towards
 
 
+def _rows_bottom(groups, rows, first_h, sub_h, pad):
+    """Where the departure rows end, for the given row heights."""
+    return TOP_OFFSET + groups * first_h + (rows - groups) * sub_h + (groups - 1) * (2 * pad + 1)
+
+
 def _draw_separator_line(y):
     """Draw a thin horizontal separator line."""
     epd.hline(TEXT_LEFT_OFFSET, y, DISPLAY_WIDTH - 2 * TEXT_LEFT_OFFSET, COLOR_BLACK)
@@ -180,7 +190,7 @@ def _draw_separator_line(y):
 
 def write_to_display(data):
     """Render departure data to display with grouped layout by line."""
-    global epd, _refresh_count, _arriving_positions
+    global epd, _refresh_count, _arriving_positions, _last_displayed_minute
 
     print('write_to_display: starting render, animation_state={}'.format(_arriving_indicator_state))
 
@@ -221,6 +231,11 @@ def write_to_display(data):
             group_order.append(line['name'])
             seen.add(line['name'])
 
+    # Normal rows when they fit above the bottom row, else compact ones
+    first_h, sub_h, pad = GROUP_FIRST_ROW_HEIGHT, GROUP_SUB_ROW_HEIGHT, GROUP_SEPARATOR_PADDING
+    if _rows_bottom(len(group_order), len(lines), first_h, sub_h, pad) > LAST_ROW_TOP_OFFSET:
+        first_h, sub_h, pad = COMPACT_FIRST_ROW_HEIGHT, COMPACT_SUB_ROW_HEIGHT, COMPACT_SEPARATOR_PADDING
+
     # Render grouped layout
     current_y = TOP_OFFSET
 
@@ -229,9 +244,12 @@ def write_to_display(data):
 
         # Draw separator line before group (except first)
         if group_idx > 0:
-            current_y += GROUP_SEPARATOR_PADDING
+            if current_y + 2 * pad + 1 + first_h > LAST_ROW_TOP_OFFSET:
+                print('write_to_display: no room for {} and below'.format(line_name))
+                break
+            current_y += pad
             _draw_separator_line(current_y)
-            current_y += GROUP_SEPARATOR_PADDING + 1  # +1 for line thickness
+            current_y += pad + 1  # +1 for line thickness
 
         for row_idx, line in enumerate(group_lines):
             departures = line['departures']
@@ -241,7 +259,9 @@ def write_to_display(data):
                 departures = [d for d in departures if d['countdown'] >= 6]
 
             is_first_row = (row_idx == 0)
-            row_height = GROUP_FIRST_ROW_HEIGHT if is_first_row else GROUP_SUB_ROW_HEIGHT
+            row_height = first_h if is_first_row else sub_h
+            if current_y + row_height > LAST_ROW_TOP_OFFSET:
+                break  # even compact rows do not all fit; the next group stops too
 
             # Draw line name only on first row of group
             if is_first_row:
@@ -290,6 +310,7 @@ def write_to_display(data):
     local_time = utime.localtime(utime.time() + get_timezone_offset())
     current_time_text = '{}:{}'.format(two_digits(local_time[3]), two_digits(local_time[4]))
     epd.text(current_time_text, TEXT_LEFT_OFFSET, LAST_ROW_TOP_OFFSET, COLOR_BLACK)
+    _last_displayed_minute = local_time[4]
 
     # Draw stale indicator (center) if data is stale
     _draw_stale_indicator()
@@ -408,7 +429,9 @@ def set_wifi_state(connected, stale_data=False):
         connected: True if Wi-Fi is connected
         stale_data: True if displaying stale/cached data (stored for stale indicator)
     """
-    global _wifi_connected, _wifi_stale_data
+    global _wifi_connected, _wifi_stale_data, _last_displayed_minute
+    if connected != _wifi_connected or stale_data != _wifi_stale_data:
+        _last_displayed_minute = -1  # update_current_time() redraws the row
     _wifi_connected = connected
     _wifi_stale_data = stale_data
 

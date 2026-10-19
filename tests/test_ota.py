@@ -1,5 +1,6 @@
 """
-Host tests for the OTA update: policy, release tool, staging, boot.py.
+Host tests for the OTA update: policy, release tool, staging, boot.py, and
+the clock behind the install window.
 
     python3 -m unittest discover tests
 
@@ -7,6 +8,7 @@ Needs openssl for the throwaway signing key. The device modules run against
 stubs for machine/utime/ujson/ntptime in a temporary "device" directory.
 """
 
+import calendar
 import hashlib
 import importlib
 import io
@@ -179,6 +181,32 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(self.load({'ota': {'manifest_url': ''}})['ota']['manifest_url'], '')
 
 
+class ClockTest(unittest.TestCase):
+    """lib/init_wifi.is_dst() on the UTC clock ntptime sets."""
+
+    def is_dst(self, *utc):
+        from lib import init_wifi
+        now = calendar.timegm(utc + (0, 0, 0))
+        fake = types.SimpleNamespace(
+            localtime=lambda t=None: time.gmtime(now if t is None else t),
+            mktime=lambda t: calendar.timegm(t[:6] + (0, 0, 0)))
+        real, init_wifi.utime = init_wifi.utime, fake
+        try:
+            return init_wifi.is_dst()
+        finally:
+            init_wifi.utime = real
+
+    def test_switches_at_one_utc_on_the_last_sundays(self):
+        self.assertFalse(self.is_dst(2026, 3, 29, 0, 59))
+        self.assertTrue(self.is_dst(2026, 3, 29, 1, 0))
+        self.assertTrue(self.is_dst(2026, 10, 25, 0, 59))
+        self.assertFalse(self.is_dst(2026, 10, 25, 1, 0))
+        self.assertTrue(self.is_dst(2026, 10, 24, 23, 0))
+        self.assertFalse(self.is_dst(2026, 3, 28, 23, 0))
+        self.assertTrue(self.is_dst(2026, 7, 1, 12, 0))
+        self.assertFalse(self.is_dst(2026, 1, 15, 12, 0))
+
+
 class ReleaseTest(unittest.TestCase):
 
     def test_build_and_verify(self):
@@ -286,6 +314,23 @@ class DeviceTest(unittest.TestCase):
         self.assertEqual(self.state(), {'bad': '1.2.0'})
         self.boot()  # nothing left to do
         self.assertEqual(self.files(), self.OLD_FILES)
+
+    def test_install_that_fails_halfway_rolls_back_at_once(self):
+        self.ota.stage(self.manifest)
+        rename = os.rename
+
+        def rename_but_not_ota(src, dst):
+            if src == 'ota/new/lib/ota.py':
+                raise OSError(28, 'No space left on device')
+            rename(src, dst)
+
+        os.rename = rename_but_not_ota
+        try:
+            self.boot()
+        finally:
+            os.rename = rename
+        self.assertEqual(self.files(), self.OLD_FILES)
+        self.assertEqual(self.state(), {'bad': '1.2.0'})
 
     def test_offline_restarts_do_not_roll_back_until_their_own_limit(self):
         boot_py = runpy.run_path(str(ROOT / 'boot.py'))

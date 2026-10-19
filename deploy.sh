@@ -1,4 +1,5 @@
 #!/bin/bash
+cd "$(dirname "$0")" || exit 1  # the paths below and git describe are the repo's
 # The port name moves with the USB socket (cu.usbserial-10, -110, -1140), so
 # without an argument take the one USB serial port there is.
 PORT=$1

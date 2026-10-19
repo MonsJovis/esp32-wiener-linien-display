@@ -97,7 +97,9 @@ turns updates off.
   - 24px: Line names (U4, 49, N49, etc.)
   - 16px: Departure times (5', 12', etc.)
   - 8px: Built-in font for destinations and status
-- **Status indicators** (bottom row):
+- **Rows**: 34/28 px per line group, compact 28/22 px when those would run into the bottom
+  row (49 and 46 both ways need it); rows that still do not fit are dropped from the bottom
+- **Status indicators** (bottom row, redrawn on a new minute or a changed Wi-Fi/stale state):
   - Left: Current time (HH:MM)
   - Center: Stale data warning (triangle icon + "STALE Xs") when data is stale
   - Right: Wi-Fi signal bars (connected) or X (disconnected)
@@ -124,8 +126,10 @@ rules under Conventions come from that setup.
 
 ```json
 {
-  "wifi_ssid": "YOUR_SSID",
-  "wifi_password": "YOUR_PASSWORD"
+  "wifi": {
+    "ssid": "YOUR_SSID",
+    "password": "YOUR_PASSWORD"
+  }
 }
 ```
 

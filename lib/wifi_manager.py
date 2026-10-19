@@ -5,7 +5,6 @@ Provides a class-based API for Wi-Fi operations with watchdog integration.
 
 import network
 import utime
-from machine import idle
 
 
 class WLANManager:
@@ -59,7 +58,7 @@ class WLANManager:
                 self.wdt.feed()
             elapsed = int(utime.time() - start)
             print('Waiting for connection... {}s'.format(elapsed), end='\r')
-            idle()
+            utime.sleep_ms(200)  # idle() returned at once and flooded the serial log
 
         print('Connected! IP:', self.wlan.ifconfig()[0])
         return True

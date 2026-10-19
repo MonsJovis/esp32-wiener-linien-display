@@ -145,6 +145,11 @@ def start_main_loop():
             # Daily update check; at night this installs and resets.
             updater.poll(wlan.is_connected(), wdt)
 
+            # NTP did not answer at boot: the clock says 2000, wrong on screen
+            # and never inside the OTA install window. Retry until it answers.
+            if utime.localtime()[0] < 2025 and sync_time():
+                current_time = last_successful_fetch = utime.time()  # the clock jumped
+
             data = None
             try:
                 data = get_data()
@@ -152,6 +157,7 @@ def start_main_loop():
             except Exception as e:
                 print('Error fetching data:', e)
 
+            last_data_fetch = current_time
             if data is None:
                 print('Error: No data returned')
                 # Only show error screen if we haven't displayed data yet
@@ -160,22 +166,18 @@ def start_main_loop():
                     write_error_to_display('Error fetching data')
                 using_stale_data = True
                 panel.led_on()
-                last_data_fetch = current_time
-                utime.sleep(1)
-                continue
+            else:
+                print('Writing to display...')
+                using_stale_data = False
+                set_wifi_state(wlan.is_connected(), False)
+                write_to_display(data['data'])
+                wdt.feed()
 
-            print('Writing to display...')
-            set_wifi_state(wlan.is_connected(), using_stale_data)
-            write_to_display(data['data'])
-            wdt.feed()
-
-            has_displayed_data = True
-            using_stale_data = False
-            panel.led_off()
-            last_data_fetch = current_time
-            last_successful_fetch = current_time
-            last_animation_toggle = current_time
-            updater.fetch_ok()
+                has_displayed_data = True
+                panel.led_off()
+                last_successful_fetch = current_time
+                last_animation_toggle = current_time
+                updater.fetch_ok()
 
         # Check if stale for too long - trigger restart.
         # Uses last_successful_fetch so repeated failures (which update
@@ -185,13 +187,16 @@ def start_main_loop():
             print('Stale for {}s, restarting...'.format(stale_for))
             offline_reset()
 
-        # Toggle arriving indicator animation at interval
-        if has_displayed_data and current_time - last_animation_toggle >= ANIMATION_INTERVAL:
+        # Bottom row: Wi-Fi bars or X, and STALE while the departures on screen are old
+        set_wifi_state(wlan.is_connected(), using_stale_data and has_displayed_data)
+
+        # The bottom row redraws on a new minute or a changed state; the other
+        # ticks toggle the arriving indicator. (Animating every tick used to
+        # starve the clock, which then only moved with a successful fetch.)
+        if (not update_current_time() and has_displayed_data
+                and current_time - last_animation_toggle >= ANIMATION_INTERVAL):
             update_arriving_animation()
             last_animation_toggle = current_time
-        else:
-            # Update current time display (only refreshes if minute changed)
-            update_current_time()
 
         # Sleep for 1 second
         # Note: Using time.sleep instead of machine.lightsleep to ensure

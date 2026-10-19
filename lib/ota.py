@@ -1,5 +1,5 @@
 """
-Over-the-air update of the app: main.py, config.json and lib/*.py.
+Over-the-air update of the app: main.py and lib/*.py.
 
 The MicroPython firmware itself stays as flashed; this replaces the Python
 files it runs. Same shape as esp-flight-monitor's OTA:
@@ -7,7 +7,8 @@ files it runs. Same shape as esp-flight-monitor's OTA:
 - A release is a git tag. .github/workflows/release.yml publishes all files as
   one bundle plus manifest.json (version, size and SHA-256 per file) and
   manifest.sig, signed with the release key. lib/ota_key.py is its public half.
-- Off unless config.json sets ota.manifest_url.
+- On by default (lib/config.py DEFAULTS); "manifest_url": "" in config.json
+  turns it off.
 - Checked once a day (an hour after a failed check), installed only inside
   ota.install_hours, local time.
 - TLS certificates are not verified (MicroPython has no CA bundle), so trust
