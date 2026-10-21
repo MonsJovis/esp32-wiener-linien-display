@@ -122,7 +122,7 @@ def write_start_msg_to_display(msg="Booting"):
     epd.show_partial()
 
 
-def write_error_to_display(msg="Unknown reason"):
+def write_error_to_display(msg="Unknown reason", hint="Retrying automatically"):
     """Show error message with centered layout - uses full refresh to ensure visibility"""
     global epd, _refresh_count
     epd.fill(COLOR_WHITE)
@@ -135,12 +135,12 @@ def write_error_to_display(msg="Unknown reason"):
     # Horizontal separator
     epd.hline(60, 115, DISPLAY_WIDTH - 120, COLOR_BLACK)
 
-    # Error message
-    _draw_centered_text(msg, 140)
+    # Error message, cut to the frame (exception texts can run long)
+    _draw_centered_text(msg[:42], 140)
 
-    # Instructions
-    _draw_centered_text("Check connection and", 180)
-    _draw_centered_text("restart device", 200)
+    # What happens next. The device retries and restarts on its own,
+    # so no "restart device" here.
+    _draw_centered_text(hint, 180)
 
     epd.show()  # Full refresh for errors to clear any ghosting
     _refresh_count = 0

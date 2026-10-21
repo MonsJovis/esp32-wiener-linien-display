@@ -14,7 +14,7 @@ from lib.display import (
     write_to_display, update_current_time, update_arriving_animation,
     clear_cached_departures, set_wifi_state
 )
-from lib.get_data import get_data
+from lib.get_data import get_data, FetchError
 from lib.init_wifi import sync_time
 from lib.ota import Updater, mark_offline, offline_reset
 
@@ -56,7 +56,7 @@ def initialize():
     print('Connecting to Wi-Fi...')
     if not wlan.connect():
         print('Wi-Fi connection failed')
-        write_error_to_display('Wi-Fi connection failed')
+        write_error_to_display('Wi-Fi connection failed', 'Check the router. Retrying...')
         mark_offline()  # the watchdog resets next; not this build's fault
         return False
 
@@ -151,11 +151,14 @@ def start_main_loop():
                 current_time = last_successful_fetch = utime.time()  # the clock jumped
 
             data = None
+            error = 'Error fetching data'
             try:
                 data = get_data()
                 wdt.feed()
             except Exception as e:
                 print('Error fetching data:', e)
+                if isinstance(e, FetchError):
+                    error = str(e)
 
             last_data_fetch = current_time
             if data is None:
@@ -163,7 +166,7 @@ def start_main_loop():
                 # Only show error screen if we haven't displayed data yet
                 # Otherwise keep showing last valid data (stale is better than error)
                 if not has_displayed_data:
-                    write_error_to_display('Error fetching data')
+                    write_error_to_display(error)
                 using_stale_data = True
                 panel.led_on()
             else:

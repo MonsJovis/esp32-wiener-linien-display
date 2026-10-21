@@ -8,6 +8,10 @@ from lib.config import get_stops
 API_BASE_URL = 'https://www.wienerlinien.at/ogd_realtime/monitor'
 
 
+class FetchError(Exception):
+    """A failed fetch. The message is the reason the error screen shows."""
+
+
 def get_diva_ids():
     """Get list of DIVA IDs from configuration."""
     return [stop['diva'] for stop in get_stops()]
@@ -181,14 +185,13 @@ def validate_response(data):
 
 
 def get_data():
+    """Fetch the departures. Raises FetchError when there are none to show."""
     data = make_request()
-    if data is None:
-        return None
 
     # Validate response structure before processing
     if not validate_response(data):
         print('Error: Invalid API response structure')
-        return None
+        raise FetchError('Invalid API response')
 
     print('--- Start Output ---\n')
 
@@ -205,7 +208,7 @@ def get_data():
 
 
 def make_request():
-    """Fetch data from Wiener Linien API and transform it."""
+    """Fetch data from Wiener Linien API and transform it. Raises FetchError."""
     import ujson
 
     url = build_api_url()
@@ -248,8 +251,10 @@ def make_request():
             except Exception as body_exc:
                 snippet = '<body read failed: {!r}>'.format(body_exc)
             print('make_request: non-200 body (first 500 chars):', snippet)
-            response.close()
-            return None
+            # A 5xx is their side: on 2026-10-21 every client got 503 for hours
+            if response.status_code >= 500:
+                raise FetchError('Wiener Linien server down (HTTP {})'.format(response.status_code))
+            raise FetchError('Wiener Linien API refused (HTTP {})'.format(response.status_code))
 
         # Stream JSON parsing - read directly from socket
         # ujson.load() reads from file-like object
@@ -273,6 +278,8 @@ def make_request():
 
         return result
 
+    except FetchError:
+        raise
     except Exception as e:
         elapsed_ms = utime.ticks_diff(utime.ticks_ms(), started_ms)
         # Re-check Wi-Fi after failure — disconnects mid-request are a common cause
@@ -286,7 +293,9 @@ def make_request():
             wifi_connected, rssi, still_connected, rssi_after))
         import sys
         sys.print_exception(e)
-        return None
+        if not still_connected:
+            raise FetchError('Wi-Fi not connected') from e
+        raise FetchError('API request failed: {}'.format(e)) from e
     finally:
         if response is not None:
             print('make_request: closing response in finally block')
